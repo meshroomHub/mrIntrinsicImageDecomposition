@@ -120,7 +120,10 @@ def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orient
     av_image.fromNumpyArray(image)
 
     optWrite = avimg.ImageWriteOptions()
-    optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+    if imagePath[-4:].lower() == ".exr":
+        optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+    else:
+        optWrite.toColorSpace(avimg.EImageColorSpace_SRGB)
     compression = "zips" if imagePath[-4:].lower() == ".exr" else ""
     oiio_params = avimg.oiioParams(orientation, pixelAspectRatio, compression)
     avimg.writeImage(imagePath, av_image, optWrite, oiio_params.get())
