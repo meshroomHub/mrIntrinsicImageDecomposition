@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import OpenImageIO as oiio
+from pathlib import Path
 from pyalicevision import image as avimg
 
 def find_metadata(oiio_spec, name: str, default, exact: bool = True):
@@ -120,8 +121,11 @@ def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orient
     av_image.fromNumpyArray(image)
 
     optWrite = avimg.ImageWriteOptions()
-    optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
-    compression = "zips" if imagePath[-4:].lower() == ".exr" else ""
+    if Path(imagePath).suffix.lower() == ".exr":
+        optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+    else:
+        optWrite.toColorSpace(avimg.EImageColorSpace_SRGB)
+    compression = "zips" if Path(imagePath).suffix.lower() == ".exr" else ""
     oiio_params = avimg.oiioParams(orientation, pixelAspectRatio, compression)
     avimg.writeImage(imagePath, av_image, optWrite, oiio_params.get())
 
