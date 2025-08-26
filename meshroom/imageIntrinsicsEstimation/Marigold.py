@@ -40,7 +40,8 @@ class MarigoldBlockSize(desc.Parallelization):
 
 class Marigold(desc.Node):
     category = "Image Intrinsics"
-    documentation = """This node computes depth, normal, fov and mesh from a monocular image using the Marigold deep model."""
+    documentation = """This node computes depth, normal, albedo, shading and material from a monocular image using 4 Marigold deep models.
+                       In case a partial depth map is provided as input, a completed depth map is estimated using Marigold-dc algorithm."""
     
     gpu = desc.Level.INTENSIVE
 
@@ -51,7 +52,13 @@ class Marigold(desc.Node):
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Input images to process. Folder path or sfmData filepath",
+            description="Input images to process. Folder path or sfmData filepath.",
+            value="",
+        ),
+        desc.File(
+            name="inputDepthMaps",
+            label="Input Depth Maps",
+            description="Input partial depth maps. Folder path.",
             value="",
         ),
         desc.ChoiceParam(
@@ -114,7 +121,6 @@ class Marigold(desc.Node):
             label="Seed Generator",
             value=-1,
             description="Reproducibility seed. Set to negative value for randomized inference.",
-            #range=(0, 50, 1),
         ),
         desc.IntParam(
             name="processingResolution",
@@ -287,7 +293,7 @@ class Marigold(desc.Node):
 
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
-                        input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
+                        input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
                         input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
 
                         # Random number generator
@@ -311,7 +317,7 @@ class Marigold(desc.Node):
                             generator=generator,
                         )
 
-                        image_stem = Path(chunk_image_paths[idx]).stem
+                        image_stem = Path(chunk_image_paths[idx][0]).stem
                         image_stem = str(image_stem)
 
                         depth_pred: np.ndarray = pipe_out.depth_np
@@ -347,7 +353,7 @@ class Marigold(desc.Node):
 
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
-                        input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
+                        input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
                         input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
 
                         # Random number generator
@@ -370,7 +376,7 @@ class Marigold(desc.Node):
                             generator=generator,
                         )
 
-                        image_stem = Path(chunk_image_paths[idx]).stem
+                        image_stem = Path(chunk_image_paths[idx][0]).stem
                         image_stem = str(image_stem)
 
                         normals_pred: np.ndarray = pipe_out.normals_np
@@ -406,7 +412,7 @@ class Marigold(desc.Node):
 
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
-                        input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
+                        input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
                         input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
 
                         # Random number generator
@@ -429,7 +435,7 @@ class Marigold(desc.Node):
                             generator=generator,
                         )
 
-                        image_stem = Path(chunk_image_paths[idx]).stem
+                        image_stem = Path(chunk_image_paths[idx][0]).stem
                         image_stem = str(image_stem)
 
                         for pred_name in pipe.target_names: #["albedo", "material"]
@@ -456,7 +462,7 @@ class Marigold(desc.Node):
 
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
-                        input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
+                        input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
                         input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
 
                         # Random number generator
@@ -479,7 +485,7 @@ class Marigold(desc.Node):
                             generator=generator,
                         )
 
-                        image_stem = Path(chunk_image_paths[idx]).stem
+                        image_stem = Path(chunk_image_paths[idx][0]).stem
                         image_stem = str(image_stem)
 
                         for pred_name in pipe.target_names: #["albedo", "shading", "residual"]
@@ -507,14 +513,15 @@ def get_image_paths_list(input_path, extension):
 
     if Path(input_path).is_dir():
         image_paths = sorted(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
+        image_paths = [(path, "") for path in image_paths]
     elif Path(input_path).suffix.lower() in [".sfm", ".abc"]:
         if Path(input_path).exists():
             dataAV = sfmData.SfMData()
             if sfmDataIO.load(dataAV, input_path, sfmDataIO.ALL):
                 views = dataAV.getViews()
                 for id, v in views.items():
-                    image_paths.append(Path(v.getImage().getImagePath()))
-            image_paths.sort()
+                    image_paths.append((Path(v.getImage().getImagePath()), str(id)))
+            image_paths.sort(key=lambda item: item[0])
     else:
         raise ValueError(f"Input path '{input_path}' is not a valid path (folder or sfmData file).")
     return image_paths
