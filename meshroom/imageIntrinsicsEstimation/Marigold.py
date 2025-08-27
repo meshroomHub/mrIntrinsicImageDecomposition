@@ -144,6 +144,12 @@ class Marigold(desc.Node):
             exclusive=True,
         ),
         desc.BoolParam(
+            name="keepInputDepthName",
+            label="Keep Input Depth Filename",
+            description="If this option is enabled, the output depth map will be named as the sparse one.",
+            value=True,
+        ),
+        desc.BoolParam(
             name="saveVisuImages",
             label="Save images for visualization",
             description="Save additional png images for depth and normal maps.",
@@ -175,7 +181,7 @@ class Marigold(desc.Node):
         desc.File(
             name="NormalMap",
             label="Normal Map",
-            description="Output colored normal map",
+            description="Colored output normal map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
             group="",
@@ -184,11 +190,20 @@ class Marigold(desc.Node):
         desc.File(
             name="DepthMap",
             label="Depth Map",
-            description="Output colored depth map",
+            description="Colored output depth map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             group="",
             enabled=lambda node: node.computeDepth.value and node.saveVisuImages.value
+        ),
+        desc.File(
+            name="InputSparseDepthMap",
+            label="Input Sparse Depth Map",
+            description="Colored input sparse depth map",
+            semantic="image",
+            value=lambda attr: "{nodeCacheFolder}/input_depth_vis_<FILESTEM>.png",
+            group="",
+            enabled=lambda node: node.computeDepth.value and node.saveVisuImages.value and node.inputDepthMaps.isLink
         ),
         desc.File(
             name="AlbedoFromAppearance",
@@ -250,6 +265,7 @@ class Marigold(desc.Node):
 
     def processChunk(self, chunk):
         import torch
+        import os
         from img_proc import image
         from marigold_utils import loadPipe
         import numpy as np
@@ -280,11 +296,23 @@ class Marigold(desc.Node):
             chunk.logger.info(f'    Resampling Method = {resample_method}')
 
             if chunk.node.computeDepth.value:
-                from marigold import MarigoldDepthPipeline, MarigoldDepthOutput
 
-                pipe: MarigoldDepthPipeline = loadPipe.loadPipe("depth")
-                denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 1;
-                ensemble_size = chunk.node.ensembleSize.value if chunk.node.ensembleSize.value > 0 else 10;
+                if not Path(chunk.node.inputDepthMaps.value).is_dir():
+                    from marigold import MarigoldDepthPipeline, MarigoldDepthOutput
+                    chunk.logger.info('Depth completion mode enabled')
+                    pipe: MarigoldDepthPipeline = loadPipe.loadPipe("depth")
+                    denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 1;
+                    ensemble_size = chunk.node.ensembleSize.value if chunk.node.ensembleSize.value > 0 else 10;
+                else:
+                    from marigold_utils.marigold_dc import MarigoldDepthCompletionPipeline, search_partial_depth
+                    pipe: MarigoldDepthCompletionPipeline = loadPipe.loadPipe("depthCompletion")
+                    # if not torch.cuda.is_available():
+                    #     import diffusers
+                    #     chunk.logger.info("CUDA not found: Using a lightweight VAE for depth completion pipeline")
+                    #     del pipeCompletion.vae
+                    #     pipeCompletion.vae = diffusers.AutoencoderTiny.from_pretrained("madebyollin/taesd").to('cpu')
+                    denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 50;
+                    ensemble_size = 1
 
                 chunk.logger.info('Depth processing parameters:')
                 chunk.logger.info(f'    Processing Resolution = {processing_res or pipe.default_processing_resolution}')
@@ -292,43 +320,70 @@ class Marigold(desc.Node):
                 chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
 
                 for idx, path in enumerate(chunk_image_paths):
-                    with torch.no_grad():
-                        input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
-                        input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
+                    input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
+                    input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
 
-                        # Random number generator
-                        if chunk.node.seedGenerator.value < 0:
-                            generator = None
-                        else:
-                            generator = torch.Generator(device=device)
-                            generator.manual_seed(chunk.node.seedGenerator.value)
+                    input_depth = search_partial_depth(chunk.node.inputDepthMaps.value, chunk.node.outputFormat.value, path, (h_ori, w_ori, pixelAspectRatio, orientation))
 
-                        # Perform inference
-                        pipe_out: MarigoldDepthOutput = pipe(
-                            input_image,
-                            denoising_steps=denoise_steps,
-                            ensemble_size=ensemble_size,
-                            processing_res=processing_res,
-                            match_input_res=match_input_res,
-                            batch_size=0,
-                            color_map="Spectral",
-                            show_progress_bar=False,
-                            resample_method=resample_method,
-                            generator=generator,
+                    depth_pred = None
+
+                    if input_depth is not None:
+
+                        depth_pred = pipe(
+                            image=input_image,
+                            sparse_depth=input_depth[0],
+                            num_inference_steps=denoise_steps,
+                            processing_resolution=processing_res,
                         )
+
+                        depth_colored = pipe.image_processor.visualize_depth(depth_pred, val_min=depth_pred.min(), val_max=depth_pred.max())[0]
+                        val_max = input_depth[0].max()
+                        mask_pos = input_depth[0] > 0.0
+                        val_min = input_depth[0][mask_pos].min()
+                        input_depth_colored = pipe.image_processor.visualize_depth(input_depth[0], val_min=val_min, val_max=val_max)[0]
+                        black_img = Image.new('RGB', input_depth_colored.size, (0,0,0))
+                        mask0_img = Image.fromarray(input_depth[0] == 0.0)
+                        input_depth_colored.paste(black_img, (0,0), mask0_img)
+
+                    elif not Path(chunk.node.inputDepthMaps.value).is_dir():
+                        with torch.no_grad():
+                            # Random number generator
+                            if chunk.node.seedGenerator.value < 0:
+                                generator = None
+                            else:
+                                generator = torch.Generator(device=device)
+                                generator.manual_seed(chunk.node.seedGenerator.value)
+
+                            # Perform inference
+                            pipe_out: MarigoldDepthOutput = pipe(
+                                input_image,
+                                denoising_steps=denoise_steps,
+                                ensemble_size=ensemble_size,
+                                processing_res=processing_res,
+                                match_input_res=match_input_res,
+                                batch_size=0,
+                                color_map="Spectral",
+                                show_progress_bar=False,
+                                resample_method=resample_method,
+                                generator=generator,
+                            )
+
+                            depth_pred: np.ndarray = pipe_out.depth_np
+                            depth_colored: Image.Image = pipe_out.depth_colored
+
+                    if depth_pred is not None:
 
                         image_stem = Path(chunk_image_paths[idx][0]).stem
                         image_stem = str(image_stem)
 
-                        depth_pred: np.ndarray = pipe_out.depth_np
-                        depth_colored: Image.Image = pipe_out.depth_colored
+                        if input_depth is not None and chunk.node.keepInputDepthName.value:
+                            depth_file_name = Path(input_depth[1]).name
+                        else:
+                            depth_file_name = "depth_" + image_stem + chunk.node.outputFormat.value
 
-                        depth_vis_file_name = "depth_vis_" + image_stem + ".png"
-                        depth_vis_file_path = str(output_dir_path / depth_vis_file_name)
-                        depth_file_name = "depth_" + image_stem + chunk.node.outputFormat.value
                         depth_file_path = str(output_dir_path / depth_file_name)
 
-                        if chunk.node.outputFormat.value == '.npy':
+                        if chunk.node.outputFormat.value == '.npy' or str(Path(input_depth[1]).suffix) == '.npy':
                             # Save as npy
                             np.save(depth_file_path, depth_pred)
                         else:
@@ -337,7 +392,15 @@ class Marigold(desc.Node):
 
                         if chunk.node.saveVisuImages.value:
                             # Save Colorize
+                            depth_vis_file_name = "depth_vis_" + image_stem + ".png"
+                            depth_vis_file_path = str(output_dir_path / depth_vis_file_name)
                             depth_colored.save(depth_vis_file_path)
+
+                            if input_depth is not None:
+
+                                input_depth_vis_file_name = "input_depth_vis_" + image_stem + ".png"
+                                input_depth_vis_file_path = str(output_dir_path / input_depth_vis_file_name)
+                                input_depth_colored.save(input_depth_vis_file_path)
 
             if chunk.node.computeNormals.value:
                 from marigold import MarigoldNormalsPipeline, MarigoldNormalsOutput
