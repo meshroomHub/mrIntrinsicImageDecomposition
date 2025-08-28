@@ -53,13 +53,13 @@ def apply_orientation(oiio_image, orientation, reverse: bool = False):
     return oiio_image
 
 
-def loadImage(imagePath: str, applyPAR: bool = False, applyOrientation: bool = True):
+def loadImage(imagePath: str, applyPAR: bool = False, applyOrientation: bool = True, clipLow: float = 0.0, clipHigh: float = 1.0, colorSpace = avimg.EImageColorSpace_SRGB):
     oiio_input = oiio.ImageInput.open(imagePath)
     oiio_spec = oiio_input.spec()
     oiio_input.close()
 
     av_image = avimg.Image_RGBfColor()
-    avOptRead = avimg.ImageReadOptions(avimg.EImageColorSpace_SRGB)
+    avOptRead = avimg.ImageReadOptions(colorSpace)
     avimg.readImage(imagePath, av_image, avOptRead)
     oiio_image = av_image.getNumpyArray()
 
@@ -79,8 +79,8 @@ def loadImage(imagePath: str, applyPAR: bool = False, applyOrientation: bool = T
         oiio_image = oiio_image_buf.get_pixels(format=oiio.FLOAT)
 
     oiio_image_buf = oiio.ImageBuf(oiio_image)
-    oiio.ImageBufAlgo.max(oiio_image_buf, oiio_image_buf, 0.0)
-    oiio.ImageBufAlgo.min(oiio_image_buf, oiio_image_buf, 1.0)
+    oiio.ImageBufAlgo.max(oiio_image_buf, oiio_image_buf, clipLow)
+    oiio.ImageBufAlgo.min(oiio_image_buf, oiio_image_buf, clipHigh)
     oiio_image = oiio_image_buf.get_pixels(format=oiio.FLOAT)
 
     return (oiio_image, h, w, pixelAspectRatio, orientation)
