@@ -170,7 +170,7 @@ class MarigoldDepthCompletionPipeline(MarigoldDepthPipeline):
 
 def search_partial_depth(depth_dir, depth_ext, img_path, img_meta):
     # Search for an existing partial depth
-    input_depth = None
+    input_depth_out = None
     if Path(depth_dir).is_dir():
         input_depth_map_names = []
         input_depth_map_names.append("depth_" + str(img_path[0].stem) + depth_ext)
@@ -197,5 +197,7 @@ def search_partial_depth(depth_dir, depth_ext, img_path, img_meta):
                 if (h_depth, w_depth, par_depth, orientation_depth) == img_meta:
                     input_depth = input_depth[:,:,0]
 
-    return (input_depth, input_depth_map_file_path)
+            input_depth_out = (input_depth, input_depth_map_file_path)
+
+    return input_depth_out
 
