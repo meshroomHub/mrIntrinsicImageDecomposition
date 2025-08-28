@@ -297,7 +297,7 @@ class Marigold(desc.Node):
 
             if chunk.node.computeDepth.value:
 
-                if not Path(chunk.node.inputDepthMaps.value).is_dir():
+                if not chunk.node.inputDepthMaps.isLink:
                     from marigold import MarigoldDepthPipeline, MarigoldDepthOutput
                     chunk.logger.info('Depth completion mode enabled')
                     pipe: MarigoldDepthPipeline = loadPipe.loadPipe("depth")
@@ -323,7 +323,9 @@ class Marigold(desc.Node):
                     input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
                     input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
 
-                    input_depth = search_partial_depth(chunk.node.inputDepthMaps.value, chunk.node.outputFormat.value, path, (h_ori, w_ori, pixelAspectRatio, orientation))
+                    input_depth = None
+                    if chunk.node.inputDepthMaps.isLink:
+                        input_depth = search_partial_depth(chunk.node.inputDepthMaps.value, chunk.node.outputFormat.value, path, (h_ori, w_ori, pixelAspectRatio, orientation))
 
                     depth_pred = None
 
@@ -345,7 +347,7 @@ class Marigold(desc.Node):
                         mask0_img = Image.fromarray(input_depth[0] == 0.0)
                         input_depth_colored.paste(black_img, (0,0), mask0_img)
 
-                    elif not Path(chunk.node.inputDepthMaps.value).is_dir():
+                    elif not chunk.node.inputDepthMaps.isLink:
                         with torch.no_grad():
                             # Random number generator
                             if chunk.node.seedGenerator.value < 0:
@@ -383,7 +385,7 @@ class Marigold(desc.Node):
 
                         depth_file_path = str(output_dir_path / depth_file_name)
 
-                        if chunk.node.outputFormat.value == '.npy' or str(Path(input_depth[1]).suffix) == '.npy':
+                        if chunk.node.outputFormat.value == '.npy' or (input_depth is not None and str(Path(input_depth[1]).suffix) == '.npy'):
                             # Save as npy
                             np.save(depth_file_path, depth_pred)
                         else:
