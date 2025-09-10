@@ -21,7 +21,6 @@ class MarigoldNodeSize(desc.MultiDynamicNodeSize):
             image_paths = list(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
             size = len(image_paths)
         elif node.attribute(self._params[0]).isLink:
-            #size = node.attribute(self._params[0]).getLinkParam().node.size
             size = node.attribute(self._params[0]).inputLink.node.size
         
         return size
