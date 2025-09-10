@@ -158,3 +158,30 @@ def addText(image: np.ndarray, text, x, y, size, color = (255, 0, 0)) -> np.ndar
     oiio.ImageBufAlgo.render_text(buf, int(x), int(y), text, int(size), "", color)
     return buf.get_pixels(format='uint8')
 
+def transferAVDepthMetadata(srcImagePath: str, destImagePath: str, new_min_depth: float, new_max_depth: float, new_nb_depth_values: int):
+    in_file = oiio.ImageInput.open(srcImagePath)
+    if in_file:
+        in_spec = in_file.spec()
+        in_file.close()
+        out_file = oiio.ImageInput.open(destImagePath)
+        if out_file:
+            out_spec = out_file.spec()
+            out_pixels = out_file.read_image()
+            out_file.close()
+
+            out_spec.attribute("AliceVision:SensorWidth", in_spec.getattribute("AliceVision:SensorWidth"))
+            out_spec.attribute("AliceVision:downscale", in_spec.getattribute("AliceVision:downscale"))
+            out_spec.attribute("AliceVision:minDepth", new_min_depth)
+            out_spec.attribute("AliceVision:maxDepth", new_max_depth)
+            out_spec.attribute("AliceVision:nbDepthValues", new_nb_depth_values)
+            out_spec.attribute("AliceVision:CArr", oiio.TypeDesc.TypeVector, in_spec.getattribute("AliceVision:CArr", oiio.TypeDesc("vec3")))
+            out_spec.attribute("AliceVision:P", oiio.TypeDesc.TypeMatrix44, in_spec.getattribute("AliceVision:P", oiio.TypeDesc("MATRIX44")))
+            out_spec.attribute("AliceVision:iCamArr", oiio.TypeDesc.TypeMatrix33, in_spec.getattribute("AliceVision:iCamArr", oiio.TypeDesc("MATRIX33")))
+
+            out_updated = oiio.ImageOutput.create(destImagePath)
+            if out_updated:
+                out_updated.open(destImagePath, out_spec)
+                out_updated.write_image(out_pixels)
+                out_updated.close()
+
+    

@@ -168,7 +168,7 @@ class MarigoldDepthCompletionPipeline(MarigoldDepthPipeline):
         return prediction.squeeze()
 
 
-def search_partial_depth(depth_dir, depth_ext, img_path, img_meta):
+def search_partial_depth(depth_dir, depth_ext, img_path, img_meta, logger):
     # Search for an existing partial depth
     input_depth_out = None
     if Path(depth_dir).is_dir():
@@ -189,7 +189,7 @@ def search_partial_depth(depth_dir, depth_ext, img_path, img_meta):
                 break
         if input_depth_map_file_path is not None:
             # Load partial depth map
-            print(f"Found partial depth map {input_depth_map_file_path}")
+            logger.info(f"Found partial depth map {input_depth_map_file_path}")
             if depth_ext == '.npy':
                 input_depth = np.load(input_depth_map_file_path)
             else: # '.exr'

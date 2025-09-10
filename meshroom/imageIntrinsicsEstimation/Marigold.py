@@ -21,7 +21,8 @@ class MarigoldNodeSize(desc.MultiDynamicNodeSize):
             image_paths = list(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
             size = len(image_paths)
         elif node.attribute(self._params[0]).isLink:
-            size = node.attribute(self._params[0]).getLinkParam().node.size
+            #size = node.attribute(self._params[0]).getLinkParam().node.size
+            size = node.attribute(self._params[0]).inputLink.node.size
         
         return size
 
@@ -325,7 +326,7 @@ class Marigold(desc.Node):
 
                     input_depth = None
                     if chunk.node.inputDepthMaps.isLink:
-                        input_depth = search_partial_depth(chunk.node.inputDepthMaps.value, chunk.node.outputFormat.value, path, (h_ori, w_ori, pixelAspectRatio, orientation))
+                        input_depth = search_partial_depth(chunk.node.inputDepthMaps.value, chunk.node.outputFormat.value, path, (h_ori, w_ori, pixelAspectRatio, orientation), chunk.logger)
 
                     depth_pred = None
 
@@ -391,6 +392,11 @@ class Marigold(desc.Node):
                         else:
                             depth_to_save = depth_pred[:,:,np.newaxis].copy()
                             image.writeImage(depth_file_path, depth_to_save, h_ori, w_ori, orientation, pixelAspectRatio)
+                            if input_depth is not None:
+                                minDepth = depth_pred.min()
+                                maxDepth = depth_pred.max()
+                                nbDepthValues = depth_pred.shape[0] * depth_pred.shape[1] # h_ori * w_ori ????
+                                image.transferAVDepthMetadata(input_depth[1], depth_file_path, minDepth, maxDepth, nbDepthValues)
 
                         if chunk.node.saveVisuImages.value:
                             # Save Colorize
