@@ -28,9 +28,9 @@ def loadPipe(type: str = "depth"):
     else:
         return None
 
-    # try:
-    #     pipe.enable_xformers_memory_efficient_attention()
-    # except ImportError:
-    #     pass  # run without xformers
+    try:
+        pipe.enable_xformers_memory_efficient_attention()
+    except ImportError:
+        pass  # run without xformers
 
     return pipe

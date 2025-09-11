@@ -181,6 +181,15 @@ class Marigold(desc.Node):
         desc.File(
             name="NormalMap",
             label="Normal Map",
+            description="Output normal map",
+            semantic="image",
+            value=lambda attr: "{nodeCacheFolder}/normals_<FILESTEM>.exr",
+            group="",
+            enabled=lambda node: node.computeNormals.value and node.saveVisuImages.value
+        ),
+        desc.File(
+            name="NormalMapColor",
+            label="Colored Normal Map",
             description="Colored output normal map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
@@ -190,6 +199,15 @@ class Marigold(desc.Node):
         desc.File(
             name="DepthMap",
             label="Depth Map",
+            description="Output depth map",
+            semantic="image",
+            value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
+            group="",
+            enabled=lambda node: node.computeDepth.value and node.saveVisuImages.value
+        ),
+        desc.File(
+            name="DepthMapColor",
+            label="Colored Depth Map",
             description="Colored output depth map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
@@ -371,7 +389,7 @@ class Marigold(desc.Node):
                             )
 
                             depth_pred: np.ndarray = pipe_out.depth_np
-                            depth_colored: Image.Image = pipe_out.depth_colored
+                            depth_colored: np.ndarray = np.array(pipe_out.depth_colored)
 
                     if depth_pred is not None:
 
@@ -450,7 +468,7 @@ class Marigold(desc.Node):
                         image_stem = str(image_stem)
 
                         normals_pred: np.ndarray = pipe_out.normals_np
-                        normals_colored: Image.Image = pipe_out.normals_img
+                        normals_colored: np.ndarray = np.array(pipe_out.normals_img)
 
                         normals_vis_file_name = "normals_vis_" + image_stem + ".png"
                         normals_vis_file_path = str(output_dir_path / normals_vis_file_name)
