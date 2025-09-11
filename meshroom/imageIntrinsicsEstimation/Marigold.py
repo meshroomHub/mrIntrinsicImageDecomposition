@@ -403,12 +403,16 @@ class Marigold(desc.Node):
 
                         depth_file_path = str(output_dir_path / depth_file_name)
 
+                        metadata_deep_model = {}
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Depth"
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
+
                         if chunk.node.outputFormat.value == '.npy' or (input_depth is not None and str(Path(input_depth[1]).suffix) == '.npy'):
                             # Save as npy
                             np.save(depth_file_path, depth_pred)
                         else:
                             depth_to_save = depth_pred[:,:,np.newaxis].copy()
-                            image.writeImage(depth_file_path, depth_to_save, h_ori, w_ori, orientation, pixelAspectRatio)
+                            image.writeImage(depth_file_path, depth_to_save, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                             if input_depth is not None:
                                 minDepth = depth_pred.min()
                                 maxDepth = depth_pred.max()
@@ -419,7 +423,7 @@ class Marigold(desc.Node):
                             # Save Colorize
                             depth_vis_file_name = "depth_vis_" + image_stem + ".png"
                             depth_vis_file_path = str(output_dir_path / depth_vis_file_name)
-                            image.writeImage(depth_vis_file_path, depth_colored, h_ori, w_ori, orientation, pixelAspectRatio)
+                            image.writeImage(depth_vis_file_path, depth_colored, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
                             if input_depth is not None:
 
@@ -475,16 +479,20 @@ class Marigold(desc.Node):
                         normals_file_name = "normals_" + image_stem + chunk.node.outputFormat.value
                         normals_file_path = str(output_dir_path / normals_file_name)
 
+                        metadata_deep_model = {}
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Normal"
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
+
                         if chunk.node.outputFormat.value == '.npy':
                             # Save as npy
                             np.save(normals_file_path, normals_pred)
                         else:
                             normals_to_save = np.transpose(normals_pred, (1, 2, 0)).copy()
-                            image.writeImage(normals_file_path, normals_to_save, h_ori, w_ori, orientation, pixelAspectRatio)
+                            image.writeImage(normals_file_path, normals_to_save, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
                         if chunk.node.saveVisuImages.value:
                             # Save Colorize
-                            image.writeImage(normals_vis_file_path, normals_colored, h_ori, w_ori, orientation, pixelAspectRatio)
+                            image.writeImage(normals_vis_file_path, normals_colored, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
             if chunk.node.computeAppearance.value:
                 from marigold import MarigoldIIDPipeline, MarigoldIIDOutput
@@ -526,6 +534,10 @@ class Marigold(desc.Node):
                         image_stem = Path(chunk_image_paths[idx][0]).stem
                         image_stem = str(image_stem)
 
+                        metadata_deep_model = {}
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Appearance"
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
+
                         for pred_name in pipe.target_names: #["albedo", "material"]
                             pred: np.ndarray = np.moveaxis(pipe_out[pred_name].array, 0, -1).copy()
                             pred_file_name = pred_name + "_appearance_" + image_stem + chunk.node.outputFormat.value
@@ -534,7 +546,7 @@ class Marigold(desc.Node):
                                 # Save as npy
                                 np.save(pred_file_path, pred)
                             else:
-                                image.writeImage(pred_file_path, pred, h_ori, w_ori, orientation, pixelAspectRatio)
+                                image.writeImage(pred_file_path, pred, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
             if chunk.node.computeLighting.value:
                 from marigold import MarigoldIIDPipeline, MarigoldIIDOutput
@@ -576,6 +588,10 @@ class Marigold(desc.Node):
                         image_stem = Path(chunk_image_paths[idx][0]).stem
                         image_stem = str(image_stem)
 
+                        metadata_deep_model = {}
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Lighting"
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
+
                         for pred_name in pipe.target_names: #["albedo", "shading", "residual"]
                             pred: np.ndarray = np.moveaxis(pipe_out[pred_name].array, 0, -1).copy()
                             pred_file_name = pred_name + "_lighting_" + image_stem + chunk.node.outputFormat.value
@@ -584,7 +600,7 @@ class Marigold(desc.Node):
                                 # Save as npy
                                 np.save(pred_file_path, pred)
                             else:
-                                image.writeImage(pred_file_path, pred, h_ori, w_ori, orientation, pixelAspectRatio)
+                                image.writeImage(pred_file_path, pred, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
             chunk.logger.info('Marigold end')
         finally:

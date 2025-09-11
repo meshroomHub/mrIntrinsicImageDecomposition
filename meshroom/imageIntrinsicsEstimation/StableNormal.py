@@ -197,11 +197,15 @@ class StableNormal(desc.Node):
                     prediction = pipe_out.prediction[0].copy()
                     normalMap = (prediction.clip(-1,1) + 1) / 2
 
+                    metadata_deep_model = {}
+                    metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "stableNormal"
+                    metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "2025.08.12"
+
                     outputDirPath = Path(chunk.node.output.value)
                     image_stem = Path(chunk_image_paths[idx]).stem
                     of_file_name = "normal_" + image_stem + ".exr"
 
-                    image.writeImage(str(outputDirPath / of_file_name), normalMap, h_ori, w_ori, orientation, pixelAspectRatio)
+                    image.writeImage(str(outputDirPath / of_file_name), normalMap, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
             
             chunk.logger.info('Publish end')
         finally:
