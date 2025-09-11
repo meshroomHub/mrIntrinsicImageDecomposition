@@ -328,6 +328,9 @@ class MoGe(desc.Node):
                     mask_file_name = "mask_" + image_stem + ".exr"
                     mask_file_path = str(outputDirPath / mask_file_name)
 
+                    metadata_deep_model = {}
+                    metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "MoGe"
+                    metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "2025.03.06"
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
                         image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
@@ -348,6 +351,11 @@ class MoGe(desc.Node):
                         mask_to_write = mask.astype(np.float32).copy()
                         mask_to_write = mask_to_write[:,:,np.newaxis]
                         image.writeImage(mask_file_path, mask_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
+
+                    image.writeImage(depth_file_path, 1/depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                    image.writeImage(normals_file_path, normals, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                    image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                    image.writeImage(vis_normal_file_path, colored_normals, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
                     fov_x, fov_y = utils3d.numpy.intrinsics_to_fov(intrinsics)
 

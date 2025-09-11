@@ -86,7 +86,7 @@ def loadImage(imagePath: str, applyPAR: bool = False, applyOrientation: bool = T
 
     return (oiio_image, h, w, pixelAspectRatio, orientation)
 
-def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orientation: int = 1, pixelAspectRatio: float = 1.0) -> None:
+def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orientation: int = 1, pixelAspectRatio: float = 1.0, metadata = {}) -> None:
     if orientation > 1:
         image = apply_orientation(image, orientation, reverse=True)
         if orientation > 4:
@@ -127,6 +127,11 @@ def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orient
         optWrite.toColorSpace(avimg.EImageColorSpace_SRGB)
     compression = "zips" if Path(imagePath).suffix.lower() == ".exr" else ""
     oiio_params = avimg.oiioParams(orientation, pixelAspectRatio, compression)
+
+    for name, value in metadata.items():
+        if isinstance(name, str) and isinstance(value, str) and name != "" and value != "":
+            oiio_params.add(name, value)
+
     avimg.writeImage(imagePath, av_image, optWrite, oiio_params.get())
 
 def loadSequence(sequencePath: str, incolorspace: str = 'acescg', start: int = 0, stop: int = -1, verbose = False):
