@@ -78,6 +78,12 @@ class MoGe(desc.Node):
             enabled=lambda node: not node.automaticFOVEstimation.value
         ),
         desc.BoolParam(
+            name="saveVisuImages",
+            label="Save images for visualization",
+            description="Save additional png images for depth and normal maps.",
+            value=False,
+        ),
+        desc.BoolParam(
             name="saveMesh",
             label="Save Mesh",
             description="If this option is enabled, a ply file will be saved with the estimated mesh. The color will be saved as vertex colors.",
@@ -121,6 +127,7 @@ class MoGe(desc.Node):
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
             group="",
+            enabled=lambda node: node.saveVisuImages.value,
         ),
         desc.File(
             name="DepthMap",
@@ -137,6 +144,7 @@ class MoGe(desc.Node):
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             group="",
+            enabled=lambda node: node.saveVisuImages.value,
         )
     ]
 

@@ -185,7 +185,7 @@ class Marigold(desc.Node):
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_<FILESTEM>.exr",
             group="",
-            enabled=lambda node: node.computeNormals.value and node.saveVisuImages.value
+            enabled=lambda node: node.computeNormals.value
         ),
         desc.File(
             name="NormalMapColor",
@@ -203,7 +203,7 @@ class Marigold(desc.Node):
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
             group="",
-            enabled=lambda node: node.computeDepth.value and node.saveVisuImages.value
+            enabled=lambda node: node.computeDepth.value
         ),
         desc.File(
             name="DepthMapColor",
