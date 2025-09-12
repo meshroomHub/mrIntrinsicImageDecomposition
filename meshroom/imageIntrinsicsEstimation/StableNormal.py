@@ -103,7 +103,7 @@ class StableNormal(desc.Node):
         desc.File(
             name="NormalMap",
             label="Normal Map",
-            description="Output optical flow images",
+            description="Output normal maps",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normal_<FILESTEM>.exr",
             group="",
@@ -159,11 +159,11 @@ class StableNormal(desc.Node):
             pipe.to(DEVICE)
             pipe.prior.to(DEVICE, torch.float16)
             
-            # try:
-            #     import xformers
-            #     pipe.enable_xformers_memory_efficient_attention()
-            # except ImportError:
-            #     print("XFormers not available, running without memory optimizations")
+            try:
+                import xformers
+                pipe.enable_xformers_memory_efficient_attention()
+            except ImportError:
+                print("XFormers not available, running without memory optimizations")
 
             # computation
             chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
