@@ -419,7 +419,7 @@ class Marigold(desc.Node):
                             # Save Colorize
                             depth_vis_file_name = "depth_vis_" + image_stem + ".png"
                             depth_vis_file_path = str(output_dir_path / depth_vis_file_name)
-                            depth_colored.save(depth_vis_file_path)
+                            image.writeImage(depth_vis_file_path, depth_colored, h_ori, w_ori, orientation, pixelAspectRatio)
 
                             if input_depth is not None:
 
@@ -484,7 +484,7 @@ class Marigold(desc.Node):
 
                         if chunk.node.saveVisuImages.value:
                             # Save Colorize
-                            normals_colored.save(normals_vis_file_path)
+                            image.writeImage(normals_vis_file_path, normals_colored, h_ori, w_ori, orientation, pixelAspectRatio)
 
             if chunk.node.computeAppearance.value:
                 from marigold import MarigoldIIDPipeline, MarigoldIIDOutput
