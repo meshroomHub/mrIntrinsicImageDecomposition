@@ -78,6 +78,18 @@ class MoGe(desc.Node):
             enabled=lambda node: not node.automaticFOVEstimation.value
         ),
         desc.BoolParam(
+            name="outputDepth",
+            label="Output Depth Map",
+            description="If this option is enabled, a depth map is generated.",
+            value=True,
+        ),
+        desc.BoolParam(
+            name="outputNormals",
+            label="Output Normal Map",
+            description="If this option is enabled, a normal map is generated.",
+            value=True,
+        ),
+        desc.BoolParam(
             name="saveVisuImages",
             label="Save images for visualization",
             description="Save additional png images for depth and normal maps.",
@@ -119,6 +131,7 @@ class MoGe(desc.Node):
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_<FILESTEM>.exr",
             group="",
+            enabled=lambda node: node.outputNormals.value,
         ),
         desc.File(
             name="NormalMapColor",
@@ -127,7 +140,7 @@ class MoGe(desc.Node):
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
             group="",
-            enabled=lambda node: node.saveVisuImages.value,
+            enabled=lambda node: node.outputNormals.value and node.saveVisuImages.value,
         ),
         desc.File(
             name="DepthMap",
@@ -136,6 +149,7 @@ class MoGe(desc.Node):
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
             group="",
+            enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
             name="DepthMapColor",
@@ -144,7 +158,7 @@ class MoGe(desc.Node):
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             group="",
-            enabled=lambda node: node.saveVisuImages.value,
+            enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         )
     ]
 
@@ -227,10 +241,14 @@ class MoGe(desc.Node):
                     depth_to_write = depth[:,:,np.newaxis]
                     colored_normals = colorize_normal(normals)
 
-                    image.writeImage(depth_file_path, 1/depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
-                    image.writeImage(normals_file_path, normals, h_ori, w_ori, orientation, pixelAspectRatio)
-                    image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio)
-                    image.writeImage(vis_normal_file_path, colored_normals, h_ori, w_ori, orientation, pixelAspectRatio)
+                    if chunk.node.outputDepth.value:
+                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
+                    if chunk.node.outputNormals.value:
+                        image.writeImage(normals_file_path, normals, h_ori, w_ori, orientation, pixelAspectRatio)
+                    if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
+                        image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio)
+                    if chunk.node.outputNormals.value and chunk.node.saveVisuImages.value:
+                        image.writeImage(vis_normal_file_path, colored_normals, h_ori, w_ori, orientation, pixelAspectRatio)
 
                     fov_x, fov_y = utils3d.numpy.intrinsics_to_fov(intrinsics)
                     fov_file_name = "fov_" + image_stem + ".json"
