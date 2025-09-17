@@ -79,8 +79,9 @@ class MoGe2(desc.Node):
         desc.BoolParam(
             name="halfSizeModel",
             label="Half Size Model",
-            description="Use fp16 precision for much faster inference.",
+            description="Use Float16 instead of Float32 inside the deep model for much faster inference.",
             value=False,
+            advanced=True,
         ),
         desc.IntParam(
             name="resolutionLevel",
@@ -91,6 +92,7 @@ class MoGe2(desc.Node):
                         "Defaults to 9. Note that it is irrelevant to the output size, which is always the same as the input size."
                         "`resolution_level` actually controls `num_tokens`. See `num_tokens` for more details.",
             range=(0, 9, 1),
+            advanced=True,
         ),
         desc.FloatParam(
             name="threshold",
@@ -98,6 +100,7 @@ class MoGe2(desc.Node):
             value=0.04,
             description="Threshold for removing edges. Defaults to 0.04. Smaller value removes more edges.",
             range=(0.001, 0.1, 0.001),
+            advanced=True,
         ),
         desc.BoolParam(
             name="outputDepth",
@@ -114,7 +117,7 @@ class MoGe2(desc.Node):
         desc.BoolParam(
             name="outputPoints",
             label="Output Points",
-            description="If this option is enabled, an image of points is generated.",
+            description="If this option is enabled, an image of depth as vector field is generated.",
             value=False,
         ),
         desc.BoolParam(
