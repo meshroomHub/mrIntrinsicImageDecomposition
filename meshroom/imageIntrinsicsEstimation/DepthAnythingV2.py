@@ -92,6 +92,13 @@ class DepthAnythingV2(desc.Node):
             range=(1.0, 500.0, 1.0),
             enabled=lambda node: node.metricModel.value,
         ),
+        desc.IntParam(
+            name="inputModelSize",
+            label="Input Model Size",
+            value=518,
+            description="Input size of the deep model. The higher, the more VRAM used. Default 518",
+            range=(128, 2048, 1),
+        ),
         desc.BoolParam(
             name="outputDepth",
             label="Output Depth Map",
@@ -221,7 +228,7 @@ class DepthAnythingV2(desc.Node):
 
                     img_cv2 = np.take((np.clip(img, 0.0, 1.0) * 255).astype(np.uint8), [2,1,0], axis=-1)
 
-                    input_size = 518
+                    input_size = chunk.node.inputModelSize.value
                     
                     depth = depth_anything.infer_image(img_cv2, input_size)
                     if not chunk.node.metricModel.value:
