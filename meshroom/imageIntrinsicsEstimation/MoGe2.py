@@ -78,6 +78,29 @@ class MoGe2(desc.Node):
             enabled=lambda node: not node.automaticFOVEstimation.value
         ),
         desc.BoolParam(
+            name="halfSizeModel",
+            label="Half Size Model",
+            description="Use fp16 precision for much faster inference.",
+            value=False,
+        ),
+        desc.IntParam(
+            name="resolutionLevel",
+            label="Resolution Level",
+            value=9,
+            description="An integer [0-9] for the resolution level for inference."
+                        "Higher value means more tokens and the finer details will be captured, but inference can be slower."
+                        "Defaults to 9. Note that it is irrelevant to the output size, which is always the same as the input size."
+                        "`resolution_level` actually controls `num_tokens`. See `num_tokens` for more details.",
+            range=(0, 9, 1),
+        ),
+        desc.FloatParam(
+            name="threshold",
+            label="Threshold",
+            value=0.04,
+            description="Threshold for removing edges. Defaults to 0.04. Smaller value removes more edges.",
+            range=(0.001, 0.1, 0.001),
+        ),
+        desc.BoolParam(
             name="outputDepth",
             label="Output Depth Map",
             description="If this option is enabled, a depth map is generated.",
@@ -110,8 +133,17 @@ class MoGe2(desc.Node):
         desc.BoolParam(
             name="saveMesh",
             label="Save Mesh",
-            description="If this option is enabled, a ply file will be saved with the estimated mesh. The color will be saved as vertex colors.",
+            description="If this option is enabled, the estimated mesh will be saved.",
             value=False,
+        ),
+        desc.ChoiceParam(
+            name="meshFormat",
+            label="Mesh Format",
+            description="Format to save mesh. In ply, the color will be saved as vertex colors, in glb, as texture.",
+            values=["ply", "glb", "both"],
+            value="glb",
+            exclusive=True,
+            enabled=lambda node: node.saveMesh.value
         ),
         desc.IntParam(
             name="blockSize",
@@ -171,7 +203,39 @@ class MoGe2(desc.Node):
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             group="",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
-        )
+        ),
+        desc.File(
+            name="Mask",
+            label="Mask",
+            description="Edge mask",
+            semantic="image",
+            value=lambda attr: "{nodeCacheFolder}/mask_<FILESTEM>.exr",
+            group="",
+            enabled=lambda node: node.outputMask.value
+        ),
+        desc.File(
+            name="Fov",
+            label="Field Of View",
+            description="Output fields of view Fov_x, Fov_y in a json file",
+            value=lambda attr: "{nodeCacheFolder}/fov_<FILESTEM>.json",
+            group="",
+        ),
+        desc.File(
+            name="MeshPly",
+            label="Estimated Mesh .ply",
+            description="Output mesh in ply format",
+            value=lambda attr: "{nodeCacheFolder}/mesh_<FILESTEM>.ply",
+            group="",
+            enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "ply"],
+        ),
+        desc.File(
+            name="MeshGlb",
+            label="Estimated Mesh .glb",
+            description="Output mesh in glb format",
+            value=lambda attr: "{nodeCacheFolder}/mesh_<FILESTEM>.glb",
+            group="",
+            enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "glb"],
+        ),
     ]
 
     def preprocess(self, node):
@@ -213,7 +277,7 @@ class MoGe2(desc.Node):
             chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
 
             # Initialize models
-            print("Loading MoGe model...")
+            chunk.logger.info("Loading MoGe model...")
             DEFAULT_PRETRAINED_MODEL_FOR_EACH_VERSION = {
                 "v1": os.getenv('MOGE2_MODELS_PATH') + "/moge-vitl/model.pt",
                 "v2": os.getenv('MOGE2_MODELS_PATH') + "/moge-2-vitl-normal/model.pt",
@@ -222,9 +286,7 @@ class MoGe2(desc.Node):
             pretrained_model_name_or_path = DEFAULT_PRETRAINED_MODEL_FOR_EACH_VERSION[model_version]
             model = import_model_class_by_version(model_version).from_pretrained(pretrained_model_name_or_path).to(device).eval()
 
-            use_fp16 = False
-
-            if use_fp16:
+            if chunk.node.halfSizeModel.value:
                 model.half()
 
             fov_x_ =  None if chunk.node.automaticFOVEstimation.value else chunk.node.horizontalFov.value
@@ -237,14 +299,12 @@ class MoGe2(desc.Node):
                     # safe clamp between [0,1] in case of a wrong input cs 
                     image_tensor = torch.clamp(image_tensor, 0, 1)
                     
-                    resolution_level = 9
+                    resolution_level = chunk.node.resolutionLevel.value
                     num_tokens = None
 
-                    output = model.infer(image_tensor, fov_x=fov_x_, resolution_level=resolution_level, num_tokens=num_tokens, use_fp16=use_fp16)
+                    output = model.infer(image_tensor, fov_x=fov_x_, resolution_level=resolution_level, num_tokens=num_tokens, use_fp16=chunk.node.halfSizeModel.value)
                     points, depth, mask, intrinsics = output['points'].cpu().numpy(), output['depth'].cpu().numpy(), output['mask'].cpu().numpy(), output['intrinsics'].cpu().numpy()
                     normals = output['normal'].cpu().numpy() if 'normal' in output else None
-
-                    chunk.logger.info(f'Intrinsics : {intrinsics}')
 
                     # Write outputs
                     outputDirPath = Path(chunk.node.output.value)
@@ -299,9 +359,9 @@ class MoGe2(desc.Node):
                             'fov_y': round(float(np.rad2deg(fov_y)), 2),
                         }, f)
 
-                    threshold_meshing = 0.04
+                    threshold_meshing = chunk.node.threshold.value
                     if chunk.node.saveMesh.value:
-                        ply_file_name = "pointcloud_" + image_stem + ".ply"
+                        ply_file_name = "mesh_" + image_stem + ".ply"
                         mesh_file_name = "mesh_" + image_stem + ".glb"
                         ply_file_path = outputDirPath / ply_file_name
                         mesh_file_path = outputDirPath / mesh_file_name
@@ -332,11 +392,11 @@ class MoGe2(desc.Node):
                         if normals is not None:
                             vertex_normals = vertex_normals * [1, -1, -1]
 
-                    #if save_glb_:
-                        save_glb(mesh_file_path, vertices, faces, vertex_uvs, (img * 255.0).astype(np.uint8), vertex_normals)
+                        if chunk.node.meshFormat.value in ["both", "glb"]:
+                            save_glb(mesh_file_path, vertices, faces, vertex_uvs, (img * 255.0).astype(np.uint8), vertex_normals)
 
-                    #if save_ply_:
-                        save_ply(ply_file_path, vertices, np.zeros((0, 3), dtype=np.int32), vertex_colors, vertex_normals)
+                        if chunk.node.meshFormat.value in ["both", "ply"]:
+                            save_ply(ply_file_path, vertices, np.zeros((0, 3), dtype=np.int32), vertex_colors, vertex_normals)
 
             chunk.logger.info('MoGe2 end')
         finally:
