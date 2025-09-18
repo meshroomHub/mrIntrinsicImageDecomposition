@@ -37,9 +37,9 @@ class MoGeBlockSize(desc.Parallelization):
             return size, size, 1
 
 
-class MoGe2(desc.Node):
+class MoGe(desc.Node):
     category = "Image Intrinsics"
-    documentation = """This node computes depth, normal, fov and mesh from a monocular image using the MoGe deep model."""
+    documentation = """This node computes depth, normal, fov and mesh from a monocular image using the MoGe-2 deep model."""
     
     gpu = desc.Level.INTENSIVE
 
