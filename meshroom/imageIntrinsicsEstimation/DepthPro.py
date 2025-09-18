@@ -69,36 +69,22 @@ class DepthPro(desc.Node):
             value=False,
             advanced=True,
         ),
-        # desc.BoolParam(
-        #     name="metricModel",
-        #     label="Metric Model",
-        #     description="Use a model with metric depth output.",
-        #     value=True,
-        # ),
-        # desc.ChoiceParam(
-        #     name="metricModelType",
-        #     label="Metric Model Type",
-        #     description="Metric model best suited for indoor or outdoor depth prediction.",
-        #     values=["indoor", "outdoor"],
-        #     value="indoor",
-        #     exclusive=True,
-        #     enabled=lambda node: node.metricModel.value,
-        # ),
-        # desc.FloatParam(
-        #     name="maxDepth",
-        #     label="Max Depth",
-        #     value=20.0,
-        #     description="Maximum of the depth",
-        #     range=(1.0, 500.0, 1.0),
-        #     enabled=lambda node: node.metricModel.value,
-        # ),
-        # desc.IntParam(
-        #     name="inputModelSize",
-        #     label="Input Model Size",
-        #     value=518,
-        #     description="Input size of the deep model. The higher, the more VRAM used. Default 518",
-        #     range=(128, 2048, 1),
-        # ),
+        desc.ChoiceParam(
+            name="focalInputMode",
+            label="Focal Input Mode",
+            description="Focal estimation mode.",
+            values=["Manual", "Metadata", "Auto"],
+            value="Metadata",
+            exclusive=True,
+        ),
+        desc.FloatParam(
+            name="focalmm",
+            label="Focal (35mm eq.) [mm]",
+            value=50.0,
+            description="Focal (35mm film equivalent) in mm.",
+            range=(1.0, 1000.0, 1.0),
+            enabled=lambda node: node.focalInputMode.value == "Manual",
+        ),
         desc.BoolParam(
             name="outputDepth",
             label="Output Depth Map",
@@ -151,6 +137,13 @@ class DepthPro(desc.Node):
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             group="",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
+        ),
+        desc.File(
+            name="Focal",
+            label="Focal in pixels",
+            description="Focal used for the metric depth estimation in a json file",
+            value=lambda attr: "{nodeCacheFolder}/focal_px_<FILESTEM>.json",
+            group="",
         ),
     ]
 
@@ -213,9 +206,13 @@ class DepthPro(desc.Node):
                 with torch.no_grad():
                     img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
 
-                    img_metadata = avimg.readImageMetadataAsMap(str(chunk_image_paths[idx]))
-                    img_info = sfmData.ImageInfo(str(chunk_image_paths[idx]), w_ori, h_ori, img_metadata)
-                    f_mm = img_info.getMetadataFocalLength()
+                    f_mm = -1.0
+                    if chunk.node.focalInputMode.value == "manual":
+                        f_mm = chunk.node.focalmm.value
+                    elif chunk.node.focalInputMode.value == "metadata":
+                        img_metadata = avimg.readImageMetadataAsMap(str(chunk_image_paths[idx]))
+                        img_info = sfmData.ImageInfo(str(chunk_image_paths[idx]), w_ori, h_ori, img_metadata)
+                        f_mm = img_info.getMetadataFocalLength()
 
                     if f_mm > 0:
                         # Convert a focal length given in mm (35mm film equivalent) to pixels
@@ -229,6 +226,7 @@ class DepthPro(desc.Node):
                     depth = prediction["depth"].detach().cpu().numpy().squeeze()
                     if f_px is not None:
                         chunk.logger.info(f"Focal length (from exif): {f_px:0.2f}")
+                        focallength_px = f_px
                     elif prediction["focallength_px"] is not None:
                         focallength_px = prediction["focallength_px"].detach().cpu().item()
                         chunk.logger.info(f"Estimated focal length: {focallength_px}")
@@ -244,6 +242,13 @@ class DepthPro(desc.Node):
                     image_stem = Path(chunk_image_paths[idx]).stem
 
                     image_stem = str(image_stem)
+
+                    focal_file_name = "focal_" + image_stem + ".json"
+                    focal_file_path = str(outputDirPath / focal_file_name)
+                    with open(focal_file_path, 'w') as f:
+                        json.dump({
+                            'focal_px': float(focallength_px),
+                        }, f)
 
                     vis_file_name = "depth_vis_" + image_stem + ".png"
                     vis_file_path = str(outputDirPath / vis_file_name)
