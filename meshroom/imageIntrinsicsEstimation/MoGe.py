@@ -6,25 +6,24 @@ from meshroom.core.utils import VERBOSE_LEVEL
 
 class MoGeNodeSize(desc.MultiDynamicNodeSize):
     def computeSize(self, node):
+        if node.attribute(self._params[0]).isLink:
+            return node.attribute(self._params[0]).inputLink.node.size
+
         from pathlib import Path
-        import itertools
 
         input_path_param = node.attribute(self._params[0])
         extension_param = node.attribute(self._params[1])
-
         input_path = input_path_param.value
         extension = extension_param.value
         include_suffixes = [extension.lower(), extension.upper()]
 
         size = 1
         if Path(input_path).is_dir():
+            import itertools
             image_paths = list(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
             size = len(image_paths)
-        elif node.attribute(self._params[0]).isLink:
-            size = node.attribute(self._params[0]).inputLink.node.size
         
         return size
-
 
 class MoGeBlockSize(desc.Parallelization):
     def getSizes(self, node):
@@ -40,7 +39,7 @@ class MoGeBlockSize(desc.Parallelization):
 
 class MoGe(desc.Node):
     category = "Image Intrinsics"
-    documentation = """This node computes depth, normal, fov and mesh from a monocular image using the MoGe deep model."""
+    documentation = """This node computes depth, normal, fov and mesh from a monocular image using the MoGe-2 deep model."""
     
     gpu = desc.Level.INTENSIVE
 
@@ -78,6 +77,32 @@ class MoGe(desc.Node):
             enabled=lambda node: not node.automaticFOVEstimation.value
         ),
         desc.BoolParam(
+            name="halfSizeModel",
+            label="Half Size Model",
+            description="Use Float16 instead of Float32 inside the deep model for much faster inference.",
+            value=False,
+            advanced=True,
+        ),
+        desc.IntParam(
+            name="resolutionLevel",
+            label="Resolution Level",
+            value=9,
+            description="An integer [0-9] for the resolution level for inference."
+                        "Higher value means more tokens and the finer details will be captured, but inference can be slower."
+                        "Defaults to 9. Note that it is irrelevant to the output size, which is always the same as the input size."
+                        "`resolution_level` actually controls `num_tokens`. See `num_tokens` for more details.",
+            range=(0, 9, 1),
+            advanced=True,
+        ),
+        desc.FloatParam(
+            name="threshold",
+            label="Threshold",
+            value=0.04,
+            description="Threshold for removing edges. Defaults to 0.04. Smaller value removes more edges.",
+            range=(0.001, 0.1, 0.001),
+            advanced=True,
+        ),
+        desc.BoolParam(
             name="outputDepth",
             label="Output Depth Map",
             description="If this option is enabled, a depth map is generated.",
@@ -90,6 +115,18 @@ class MoGe(desc.Node):
             value=True,
         ),
         desc.BoolParam(
+            name="outputPoints",
+            label="Output Points",
+            description="If this option is enabled, an image of depth as vector field is generated.",
+            value=False,
+        ),
+        desc.BoolParam(
+            name="outputMask",
+            label="Output Mask",
+            description="If this option is enabled, a mask image is generated.",
+            value=False,
+        ),
+        desc.BoolParam(
             name="saveVisuImages",
             label="Save images for visualization",
             description="Save additional png images for depth and normal maps.",
@@ -98,8 +135,17 @@ class MoGe(desc.Node):
         desc.BoolParam(
             name="saveMesh",
             label="Save Mesh",
-            description="If this option is enabled, a ply file will be saved with the estimated mesh. The color will be saved as vertex colors.",
+            description="If this option is enabled, the estimated mesh will be saved.",
             value=False,
+        ),
+        desc.ChoiceParam(
+            name="meshFormat",
+            label="Mesh Format",
+            description="Format to save mesh. In ply, the color will be saved as vertex colors, in glb, as texture.",
+            values=["ply", "glb", "both"],
+            value="glb",
+            exclusive=True,
+            enabled=lambda node: node.saveMesh.value
         ),
         desc.IntParam(
             name="blockSize",
@@ -159,7 +205,39 @@ class MoGe(desc.Node):
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             group="",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
-        )
+        ),
+        desc.File(
+            name="Mask",
+            label="Mask",
+            description="Edge mask",
+            semantic="image",
+            value=lambda attr: "{nodeCacheFolder}/mask_<FILESTEM>.exr",
+            group="",
+            enabled=lambda node: node.outputMask.value
+        ),
+        desc.File(
+            name="Fov",
+            label="Field Of View",
+            description="Output fields of view Fov_x, Fov_y in a json file",
+            value=lambda attr: "{nodeCacheFolder}/fov_<FILESTEM>.json",
+            group="",
+        ),
+        desc.File(
+            name="MeshPly",
+            label="Estimated Mesh .ply",
+            description="Output mesh in ply format",
+            value=lambda attr: "{nodeCacheFolder}/mesh_<FILESTEM>.ply",
+            group="",
+            enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "ply"],
+        ),
+        desc.File(
+            name="MeshGlb",
+            label="Estimated Mesh .glb",
+            description="Output mesh in glb format",
+            value=lambda attr: "{nodeCacheFolder}/mesh_<FILESTEM>.glb",
+            group="",
+            enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "glb"],
+        ),
     ]
 
     def preprocess(self, node):
@@ -174,9 +252,10 @@ class MoGe(desc.Node):
         self.image_paths = image_paths
 
     def processChunk(self, chunk):
-        from moge.model import MoGeModel
+        from moge.model import import_model_class_by_version
         from moge.utils.io import save_glb, save_ply
-        from moge.utils.vis import colorize_normal
+        from moge.utils.vis import colorize_depth, colorize_normal
+        from moge.utils.geometry_numpy import depth_occlusion_edge_numpy
         import utils3d
 
         import torch
@@ -200,8 +279,17 @@ class MoGe(desc.Node):
             chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
 
             # Initialize models
-            print("Loading MoGe model...")
-            model = MoGeModel.from_pretrained(os.getenv('MOGE_MODEL_PATH')).to(device).eval()
+            chunk.logger.info("Loading MoGe model...")
+            DEFAULT_PRETRAINED_MODEL_FOR_EACH_VERSION = {
+                "v1": os.getenv('MOGE2_MODELS_PATH') + "/moge-vitl/model.pt",
+                "v2": os.getenv('MOGE2_MODELS_PATH') + "/moge-2-vitl-normal/model.pt",
+            }
+            model_version = "v2"
+            pretrained_model_name_or_path = DEFAULT_PRETRAINED_MODEL_FOR_EACH_VERSION[model_version]
+            model = import_model_class_by_version(model_version).from_pretrained(pretrained_model_name_or_path).to(device).eval()
+
+            if chunk.node.halfSizeModel.value:
+                model.half()
 
             fov_x_ =  None if chunk.node.automaticFOVEstimation.value else chunk.node.horizontalFov.value
 
@@ -209,18 +297,16 @@ class MoGe(desc.Node):
                 with torch.no_grad():
                     img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
                     image_tensor = torch.tensor(img, dtype=torch.float32, device=device).permute(2, 0, 1)
-                    
+
                     # safe clamp between [0,1] in case of a wrong input cs 
                     image_tensor = torch.clamp(image_tensor, 0, 1)
                     
-                    output = model.infer(image_tensor, fov_x=fov_x_)
-                    points = output['points'].cpu().numpy()
-                    depth = output['depth'].cpu().numpy()
-                    mask = output['mask'].cpu().numpy()
-                    intrinsics = output['intrinsics'].cpu().numpy()
+                    resolution_level = chunk.node.resolutionLevel.value
+                    num_tokens = None
 
-                    normals, normals_mask = utils3d.numpy.points_to_normals(points, mask=mask)
-                    normals = np.nan_to_num(normals, nan=0.0, posinf=1.0, neginf=0.0)
+                    output = model.infer(image_tensor, fov_x=fov_x_, resolution_level=resolution_level, num_tokens=num_tokens, use_fp16=chunk.node.halfSizeModel.value)
+                    points, depth, mask, intrinsics = output['points'].cpu().numpy(), output['depth'].cpu().numpy(), output['mask'].cpu().numpy(), output['intrinsics'].cpu().numpy()
+                    normals = output['normal'].cpu().numpy() if 'normal' in output else None
 
                     # Write outputs
                     outputDirPath = Path(chunk.node.output.value)
@@ -237,20 +323,34 @@ class MoGe(desc.Node):
                     normals_file_name = "normals_" + image_stem + ".exr"
                     normals_file_path = str(outputDirPath / normals_file_name)
 
-                    colored_depth = colorize_depth(depth).copy()
-                    depth_to_write = depth[:,:,np.newaxis]
-                    colored_normals = colorize_normal(normals)
+                    points_file_name = "points_" + image_stem + ".exr"
+                    points_file_path = str(outputDirPath / points_file_name)
+                    mask_file_name = "mask_" + image_stem + ".exr"
+                    mask_file_path = str(outputDirPath / mask_file_name)
 
                     if chunk.node.outputDepth.value:
+                        depth_to_write = depth[:,:,np.newaxis]
                         image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
                     if chunk.node.outputNormals.value:
-                        image.writeImage(normals_file_path, normals, h_ori, w_ori, orientation, pixelAspectRatio)
+                        normals_to_write = normals.astype(np.float32).copy()
+                        normals_to_write = normals_to_write * np.array([1, -1, -1], dtype=np.float32)
+                        image.writeImage(normals_file_path, normals_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
                     if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
+                        colored_depth = colorize_depth(depth).copy()
                         image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio)
                     if chunk.node.outputNormals.value and chunk.node.saveVisuImages.value:
+                        colored_normals = colorize_normal(normals).copy()
                         image.writeImage(vis_normal_file_path, colored_normals, h_ori, w_ori, orientation, pixelAspectRatio)
+                    if chunk.node.outputPoints.value:
+                        points_to_write = points.copy()
+                        image.writeImage(points_file_path, points_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
+                    if chunk.node.outputMask.value:
+                        mask_to_write = mask.astype(np.float32).copy()
+                        mask_to_write = mask_to_write[:,:,np.newaxis]
+                        image.writeImage(mask_file_path, mask_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
 
                     fov_x, fov_y = utils3d.numpy.intrinsics_to_fov(intrinsics)
+
                     fov_file_name = "fov_" + image_stem + ".json"
                     fov_file_path = str(outputDirPath / fov_file_name)
                     with open(fov_file_path, 'w') as f:
@@ -259,25 +359,46 @@ class MoGe(desc.Node):
                             'fov_y': round(float(np.rad2deg(fov_y)), 2),
                         }, f)
 
-                    threshold_meshing = 0.03
+                    threshold_meshing = chunk.node.threshold.value
                     if chunk.node.saveMesh.value:
                         ply_file_name = "mesh_" + image_stem + ".ply"
+                        mesh_file_name = "mesh_" + image_stem + ".glb"
                         ply_file_path = outputDirPath / ply_file_name
+                        mesh_file_path = outputDirPath / mesh_file_name
 
-                        faces, vertices, vertex_colors, vertex_uvs = utils3d.numpy.image_mesh(
+                        mask_cleaned = mask & ~utils3d.numpy.depth_edge(depth, rtol=threshold_meshing)
+                        if normals is None:
+                            faces, vertices, vertex_colors, vertex_uvs = utils3d.numpy.image_mesh(
                                 points,
-                                img.astype(np.float32),
-                                utils3d.numpy.image_uv(width=w_ori, height=int(h_ori / pixelAspectRatio)),
-                                mask=mask & ~(utils3d.numpy.depth_edge(depth, rtol=threshold_meshing, mask=mask) & utils3d.numpy.normals_edge(normals, tol=5, mask=normals_mask)),
-                                tri=True)
+                                img,
+                                utils3d.numpy.image_uv(width=img.shape[1], height=img.shape[0]),
+                                mask=mask_cleaned,
+                                tri=True
+                            )
+                            vertex_normals = None
+                        else:
+                            faces, vertices, vertex_colors, vertex_uvs, vertex_normals = utils3d.numpy.image_mesh(
+                                points,
+                                img,
+                                utils3d.numpy.image_uv(width=img.shape[1], height=img.shape[0]),
+                                normals,
+                                mask=mask_cleaned,
+                                tri=True
+                            )
                         # When exporting the model, follow the OpenGL coordinate conventions:
                         # - world coordinate system: x right, y up, z backward.
                         # - texture coordinate system: (0, 0) for left-bottom, (1, 1) for right-top.
                         vertices, vertex_uvs = vertices * [1, -1, -1], vertex_uvs * [1, -1] + [0, 1]
-                        
-                        save_ply(ply_file_path, vertices, faces, vertex_colors)
-            
-            chunk.logger.info('MoGe end')
+                        if normals is not None:
+                            vertex_normals = vertex_normals * [1, -1, -1]
+
+                        if chunk.node.meshFormat.value in ["both", "glb"]:
+                            save_glb(mesh_file_path, vertices, faces, vertex_uvs, (img * 255.0).astype(np.uint8), vertex_normals)
+
+                        if chunk.node.meshFormat.value in ["both", "ply"]:
+                            save_ply(ply_file_path, vertices, np.zeros((0, 3), dtype=np.int32), vertex_colors, vertex_normals)
+
+            chunk.logger.info('MoGe2 end')
         finally:
             chunk.logManager.end()
 
