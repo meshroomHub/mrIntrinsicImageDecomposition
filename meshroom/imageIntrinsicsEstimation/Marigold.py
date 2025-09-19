@@ -337,6 +337,10 @@ class Marigold(desc.Node):
                 chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
                 chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
 
+                metadata_deep_model = {}
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Depth"
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
+
                 for idx, path in enumerate(chunk_image_paths):
                     input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
                     input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
@@ -408,7 +412,7 @@ class Marigold(desc.Node):
                             np.save(depth_file_path, depth_pred)
                         else:
                             depth_to_save = depth_pred[:,:,np.newaxis].copy()
-                            image.writeImage(depth_file_path, depth_to_save, h_ori, w_ori, orientation, pixelAspectRatio)
+                            image.writeImage(depth_file_path, depth_to_save, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                             if input_depth is not None:
                                 minDepth = depth_pred.min()
                                 maxDepth = depth_pred.max()
@@ -419,7 +423,7 @@ class Marigold(desc.Node):
                             # Save Colorize
                             depth_vis_file_name = "depth_vis_" + image_stem + ".png"
                             depth_vis_file_path = str(output_dir_path / depth_vis_file_name)
-                            image.writeImage(depth_vis_file_path, depth_colored, h_ori, w_ori, orientation, pixelAspectRatio)
+                            image.writeImage(depth_vis_file_path, depth_colored, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
                             if input_depth is not None:
 
@@ -438,6 +442,10 @@ class Marigold(desc.Node):
                 chunk.logger.info(f'    Processing Resolution = {processing_res or pipe.default_processing_resolution}')
                 chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
                 chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
+
+                metadata_deep_model = {}
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Normal"
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
 
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
@@ -480,11 +488,11 @@ class Marigold(desc.Node):
                             np.save(normals_file_path, normals_pred)
                         else:
                             normals_to_save = np.transpose(normals_pred, (1, 2, 0)).copy()
-                            image.writeImage(normals_file_path, normals_to_save, h_ori, w_ori, orientation, pixelAspectRatio)
+                            image.writeImage(normals_file_path, normals_to_save, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
                         if chunk.node.saveVisuImages.value:
                             # Save Colorize
-                            image.writeImage(normals_vis_file_path, normals_colored, h_ori, w_ori, orientation, pixelAspectRatio)
+                            image.writeImage(normals_vis_file_path, normals_colored, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
             if chunk.node.computeAppearance.value:
                 from marigold import MarigoldIIDPipeline, MarigoldIIDOutput
@@ -497,6 +505,10 @@ class Marigold(desc.Node):
                 chunk.logger.info(f'    Processing Resolution = {processing_res or pipe.default_processing_resolution}')
                 chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
                 chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
+
+                metadata_deep_model = {}
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Appearance"
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
 
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
@@ -534,7 +546,7 @@ class Marigold(desc.Node):
                                 # Save as npy
                                 np.save(pred_file_path, pred)
                             else:
-                                image.writeImage(pred_file_path, pred, h_ori, w_ori, orientation, pixelAspectRatio)
+                                image.writeImage(pred_file_path, pred, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
             if chunk.node.computeLighting.value:
                 from marigold import MarigoldIIDPipeline, MarigoldIIDOutput
@@ -547,6 +559,10 @@ class Marigold(desc.Node):
                 chunk.logger.info(f'    Processing Resolution = {processing_res or pipe.default_processing_resolution}')
                 chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
                 chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
+
+                metadata_deep_model = {}
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Lighting"
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
 
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
@@ -584,7 +600,7 @@ class Marigold(desc.Node):
                                 # Save as npy
                                 np.save(pred_file_path, pred)
                             else:
-                                image.writeImage(pred_file_path, pred, h_ori, w_ori, orientation, pixelAspectRatio)
+                                image.writeImage(pred_file_path, pred, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
             chunk.logger.info('Marigold end')
         finally:
