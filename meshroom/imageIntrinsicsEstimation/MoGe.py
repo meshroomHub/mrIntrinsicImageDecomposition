@@ -293,6 +293,10 @@ class MoGe(desc.Node):
 
             fov_x_ =  None if chunk.node.automaticFOVEstimation.value else chunk.node.horizontalFov.value
 
+            metadata_deep_model = {}
+            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "MoGe-2-vitl-normal"
+            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "2025.03.06"
+
             for idx, path in enumerate(chunk_image_paths):
                 with torch.no_grad():
                     img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
@@ -328,34 +332,26 @@ class MoGe(desc.Node):
                     mask_file_name = "mask_" + image_stem + ".exr"
                     mask_file_path = str(outputDirPath / mask_file_name)
 
-                    metadata_deep_model = {}
-                    metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "MoGe"
-                    metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "2025.03.06"
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
-                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
+                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputNormals.value:
                         normals_to_write = normals.astype(np.float32).copy()
                         normals_to_write = normals_to_write * np.array([1, -1, -1], dtype=np.float32)
-                        image.writeImage(normals_file_path, normals_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
+                        image.writeImage(normals_file_path, normals_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                         colored_depth = colorize_depth(depth).copy()
-                        image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio)
+                        image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputNormals.value and chunk.node.saveVisuImages.value:
                         colored_normals = colorize_normal(normals).copy()
-                        image.writeImage(vis_normal_file_path, colored_normals, h_ori, w_ori, orientation, pixelAspectRatio)
+                        image.writeImage(vis_normal_file_path, colored_normals, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputPoints.value:
                         points_to_write = points.copy()
-                        image.writeImage(points_file_path, points_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
+                        image.writeImage(points_file_path, points_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputMask.value:
                         mask_to_write = mask.astype(np.float32).copy()
                         mask_to_write = mask_to_write[:,:,np.newaxis]
-                        image.writeImage(mask_file_path, mask_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
-
-                    image.writeImage(depth_file_path, 1/depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
-                    image.writeImage(normals_file_path, normals, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
-                    image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
-                    image.writeImage(vis_normal_file_path, colored_normals, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                        image.writeImage(mask_file_path, mask_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
                     fov_x, fov_y = utils3d.numpy.intrinsics_to_fov(intrinsics)
 

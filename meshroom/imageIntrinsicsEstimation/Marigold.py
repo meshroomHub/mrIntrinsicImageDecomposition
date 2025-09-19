@@ -337,6 +337,10 @@ class Marigold(desc.Node):
                 chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
                 chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
 
+                metadata_deep_model = {}
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Depth"
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
+
                 for idx, path in enumerate(chunk_image_paths):
                     input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
                     input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
@@ -403,10 +407,6 @@ class Marigold(desc.Node):
 
                         depth_file_path = str(output_dir_path / depth_file_name)
 
-                        metadata_deep_model = {}
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Depth"
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
-
                         if chunk.node.outputFormat.value == '.npy' or (input_depth is not None and str(Path(input_depth[1]).suffix) == '.npy'):
                             # Save as npy
                             np.save(depth_file_path, depth_pred)
@@ -442,6 +442,10 @@ class Marigold(desc.Node):
                 chunk.logger.info(f'    Processing Resolution = {processing_res or pipe.default_processing_resolution}')
                 chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
                 chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
+
+                metadata_deep_model = {}
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Normal"
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
 
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
@@ -479,10 +483,6 @@ class Marigold(desc.Node):
                         normals_file_name = "normals_" + image_stem + chunk.node.outputFormat.value
                         normals_file_path = str(output_dir_path / normals_file_name)
 
-                        metadata_deep_model = {}
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Normal"
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
-
                         if chunk.node.outputFormat.value == '.npy':
                             # Save as npy
                             np.save(normals_file_path, normals_pred)
@@ -506,6 +506,10 @@ class Marigold(desc.Node):
                 chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
                 chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
 
+                metadata_deep_model = {}
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Appearance"
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
+
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
                         input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
@@ -533,10 +537,6 @@ class Marigold(desc.Node):
 
                         image_stem = Path(chunk_image_paths[idx][0]).stem
                         image_stem = str(image_stem)
-
-                        metadata_deep_model = {}
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Appearance"
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
 
                         for pred_name in pipe.target_names: #["albedo", "material"]
                             pred: np.ndarray = np.moveaxis(pipe_out[pred_name].array, 0, -1).copy()
@@ -560,6 +560,10 @@ class Marigold(desc.Node):
                 chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
                 chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
 
+                metadata_deep_model = {}
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Lighting"
+                metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
+
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
                         input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
@@ -587,10 +591,6 @@ class Marigold(desc.Node):
 
                         image_stem = Path(chunk_image_paths[idx][0]).stem
                         image_stem = str(image_stem)
-
-                        metadata_deep_model = {}
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Lighting"
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
 
                         for pred_name in pipe.target_names: #["albedo", "shading", "residual"]
                             pred: np.ndarray = np.moveaxis(pipe_out[pred_name].array, 0, -1).copy()

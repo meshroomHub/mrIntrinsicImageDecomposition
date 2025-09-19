@@ -168,6 +168,10 @@ class StableNormal(desc.Node):
             # computation
             chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
 
+            metadata_deep_model = {}
+            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "stableNormal"
+            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "0.1"
+
             for idx, path in enumerate(chunk_image_paths):
                 #if idx > 0:
                 with torch.no_grad():
@@ -196,10 +200,6 @@ class StableNormal(desc.Node):
 
                     prediction = pipe_out.prediction[0].copy()
                     normalMap = (prediction.clip(-1,1) + 1) / 2
-
-                    metadata_deep_model = {}
-                    metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "stableNormal"
-                    metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "2025.08.12"
 
                     outputDirPath = Path(chunk.node.output.value)
                     image_stem = Path(chunk_image_paths[idx]).stem
