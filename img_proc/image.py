@@ -86,7 +86,9 @@ def loadImage(imagePath: str, applyPAR: bool = False, applyOrientation: bool = T
 
     return (oiio_image, h, w, pixelAspectRatio, orientation)
 
-def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orientation: int = 1, pixelAspectRatio: float = 1.0, metadata = {}) -> None:
+def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orientation: int = 1, pixelAspectRatio: float = 1.0, metadata=None) -> None:
+    if metadata is None:
+        metadata = {}
     if orientation > 1:
         image = apply_orientation(image, orientation, reverse=True)
         if orientation > 4:
