@@ -63,18 +63,27 @@ class MoGe(desc.Node):
             exclusive=True,
         ),
         desc.BoolParam(
-            name="automaticFOVEstimation",
-            label="Automatic FOV Estimation",
-            description="If this option is enabled, the MoGe model will estimate the field of view.",
+            name="automaticFoVEstimation",
+            label="Automatic FoV Estimation",
+            description="If this option is enabled, the MoGe model will estimate the field of view in degree.",
             value=True,
         ),
         desc.FloatParam(
-            name="horizontalFov",
-            label="Horizontal FOV",
+            name="horizontalFoV",
+            label="Horizontal FoV [deg]",
             value=50.0,
-            description="If camera parameters are known, set the horizontal field of view in degrees.",
-            range=(0.0, 360.0, 1.0),
-            enabled=lambda node: not node.automaticFOVEstimation.value
+            description="If camera parameters are known, set the horizontal field of view in degree.",
+            range=(0.0, 180.0, 1.0),
+            enabled=lambda node: not node.automaticFoVEstimation.value
+        ),
+        desc.ChoiceParam(
+            name="foVEstimationMode",
+            label="FoV Estimation Mode",
+            description="Select how field of view is estimated. If 'Full Auto' is selected, it is estimated by the deep Network.",
+            values=["Full Auto", "Metadata"],
+            value="Full Auto",
+            exclusive=True,
+            enabled=lambda node: node.automaticFoVEstimation.value
         ),
         desc.BoolParam(
             name="halfSizeModel",
@@ -291,7 +300,7 @@ class MoGe(desc.Node):
             if chunk.node.halfSizeModel.value:
                 model.half()
 
-            fov_x_ =  None if chunk.node.automaticFOVEstimation.value else chunk.node.horizontalFov.value
+            fov_x_ = chunk.node.horizontalFoV.value
 
             metadata_deep_model = {}
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "MoGe-2-vitl-normal"
@@ -299,8 +308,11 @@ class MoGe(desc.Node):
 
             for idx, path in enumerate(chunk_image_paths):
                 with torch.no_grad():
-                    img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
+                    img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
                     image_tensor = torch.tensor(img, dtype=torch.float32, device=device).permute(2, 0, 1)
+
+                    if chunk.node.automaticFoVEstimation.value:
+                        fov_x_ = chunk_image_paths[idx][1] if chunk.node.foVEstimationMode.value == "Metadata" else None
 
                     # safe clamp between [0,1] in case of a wrong input cs 
                     image_tensor = torch.clamp(image_tensor, 0, 1)
@@ -314,7 +326,7 @@ class MoGe(desc.Node):
 
                     # Write outputs
                     outputDirPath = Path(chunk.node.output.value)
-                    image_stem = Path(chunk_image_paths[idx]).stem
+                    image_stem = Path(chunk_image_paths[idx][0]).stem
 
                     image_stem = str(image_stem)
 
@@ -409,8 +421,10 @@ class MoGe(desc.Node):
 def get_image_paths_list(input_path, extension):
     from pyalicevision import sfmData
     from pyalicevision import sfmDataIO
+    from pyalicevision import camera
     from pathlib import Path
     import itertools
+    import numpy as np
 
     include_suffixes = [extension.lower(), extension.upper()]
     image_paths = []
@@ -423,8 +437,15 @@ def get_image_paths_list(input_path, extension):
             if sfmDataIO.load(dataAV, input_path, sfmDataIO.ALL):
                 views = dataAV.getViews()
                 for id, v in views.items():
-                    image_paths.append(Path(v.getImage().getImagePath()))
-            image_paths.sort()
+                    intrinsicId = v.getIntrinsicId()
+                    intrinsic = dataAV.getIntrinsic(intrinsicId)
+                    scaleOffset = camera.IntrinsicScaleOffset.cast(intrinsic)
+                    focalLength = scaleOffset.getFocalLength()
+                    sensorWidth = scaleOffset.sensorWidth()
+                    fov_x_deg = 2 * 180 * np.arctan(sensorWidth / ( 2 *focalLength)) / np.pi
+                    image_paths.append((Path(v.getImage().getImagePath()), fov_x_deg))
+
+            image_paths.sort(key=lambda x: x[0])
     else:
         raise ValueError(f"Input path '{input_path}' is not a valid path (folder or sfmData file).")
     return image_paths
