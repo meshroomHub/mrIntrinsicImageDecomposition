@@ -324,6 +324,8 @@ class MoGe(desc.Node):
                     points, depth, mask, intrinsics = output['points'].cpu().numpy(), output['depth'].cpu().numpy(), output['mask'].cpu().numpy(), output['intrinsics'].cpu().numpy()
                     normals = output['normal'].cpu().numpy() if 'normal' in output else None
 
+                    fov_x, fov_y = utils3d.numpy.intrinsics_to_fov(intrinsics)
+
                     # Write outputs
                     outputDirPath = Path(chunk.node.output.value)
                     image_stem = Path(chunk_image_paths[idx][0]).stem
@@ -346,6 +348,9 @@ class MoGe(desc.Node):
 
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
+                        if chunk.node.automaticFoVEstimation.value and chunk.node.foVEstimationMode.value == "Full Auto":
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe_fov_x"] = str(180*fov_x/np.pi)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe_fov_y"] = str(180*fov_y/np.pi)
                         image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputNormals.value:
                         normals_to_write = normals.astype(np.float32).copy()
@@ -364,8 +369,6 @@ class MoGe(desc.Node):
                         mask_to_write = mask.astype(np.float32).copy()
                         mask_to_write = mask_to_write[:,:,np.newaxis]
                         image.writeImage(mask_file_path, mask_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
-
-                    fov_x, fov_y = utils3d.numpy.intrinsics_to_fov(intrinsics)
 
                     fov_file_name = "fov_" + image_stem + ".json"
                     fov_file_path = str(outputDirPath / fov_file_name)
