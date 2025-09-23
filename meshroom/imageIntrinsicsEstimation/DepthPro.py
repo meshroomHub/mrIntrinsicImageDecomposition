@@ -64,8 +64,8 @@ class DepthPro(desc.Node):
         ),
         desc.BoolParam(
             name="halfSizeModel",
-            label="Half Size Model",
-            description="Use Float16 instead of Float32 inside the deep model for much faster inference.",
+            label="Half Bit Depth Model",
+            description="Use Float16 precision instead of Float32 inside the deep model for much faster inference.",
             value=False,
             advanced=True,
         ),
@@ -78,11 +78,11 @@ class DepthPro(desc.Node):
             exclusive=True,
         ),
         desc.FloatParam(
-            name="focalmm",
-            label="Focal (35mm eq.) [mm]",
+            name="focalpix",
+            label="Focal in pixels",
             value=50.0,
-            description="Focal (35mm film equivalent) in mm.",
-            range=(1.0, 1000.0, 1.0),
+            description="Focal value given in pixels.",
+            range=(1.0, 10000.0, 1.0),
             enabled=lambda node: node.focalInputMode.value == "Manual",
         ),
         desc.BoolParam(
@@ -140,7 +140,7 @@ class DepthPro(desc.Node):
         ),
         desc.File(
             name="Focal",
-            label="Focal in pixels",
+            label="Estimated Focal in pixels",
             description="Focal used for the metric depth estimation in a json file",
             value=lambda attr: "{nodeCacheFolder}/focal_px_<FILESTEM>.json",
             group="",
@@ -202,34 +202,33 @@ class DepthPro(desc.Node):
             )
             model.eval()
 
+            metadata_deep_model = {}
+            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "depth_pro"
+            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "2025.09.18"
+
             for idx, path in enumerate(chunk_image_paths):
                 with torch.no_grad():
-                    img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
+                    img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
 
-                    f_mm = -1.0
-                    if chunk.node.focalInputMode.value == "manual":
-                        f_mm = chunk.node.focalmm.value
-                    elif chunk.node.focalInputMode.value == "metadata":
-                        img_metadata = avimg.readImageMetadataAsMap(str(chunk_image_paths[idx]))
-                        img_info = sfmData.ImageInfo(str(chunk_image_paths[idx]), w_ori, h_ori, img_metadata)
-                        f_mm = img_info.getMetadataFocalLength()
+                    f_px = None
+                    if chunk.node.focalInputMode.value == "Manual":
+                        f_px = chunk.node.focalpix.value
+                    elif chunk.node.focalInputMode.value == "Metadata":
+                        f_px = chunk_image_paths[idx][1]
 
-                    if f_mm > 0:
-                        # Convert a focal length given in mm (35mm film equivalent) to pixels
-                        f_px = f_mm * np.sqrt(w_ori**2.0 + h_ori**2.0) / np.sqrt(36**2 + 24**2)
-                    else:
-                        f_px = None
+                    f_px_tt = torch.tensor(f_px) if f_px is not None else f_px
 
                     img_clip = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)
 
-                    prediction = model.infer(transform(img_clip), f_px=f_px)
+                    prediction = model.infer(transform(img_clip), f_px=f_px_tt)
                     depth = prediction["depth"].detach().cpu().numpy().squeeze()
+                    focallength_px = None
                     if f_px is not None:
-                        chunk.logger.info(f"Focal length (from exif): {f_px:0.2f}")
                         focallength_px = f_px
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:inputFocalPix"] = str(focallength_px)
                     elif prediction["focallength_px"] is not None:
                         focallength_px = prediction["focallength_px"].detach().cpu().item()
-                        chunk.logger.info(f"Estimated focal length: {focallength_px}")
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DepthProFocalPix"] = str(focallength_px)
 
                     inverse_depth = 1 / depth
                     # Visualize inverse depth instead of depth, clipped to [0.1m;250m] range for better visualization.
@@ -239,16 +238,17 @@ class DepthPro(desc.Node):
 
                     # Write outputs
                     outputDirPath = Path(chunk.node.output.value)
-                    image_stem = Path(chunk_image_paths[idx]).stem
+                    image_stem = Path(chunk_image_paths[idx][0]).stem
 
                     image_stem = str(image_stem)
 
-                    focal_file_name = "focal_" + image_stem + ".json"
-                    focal_file_path = str(outputDirPath / focal_file_name)
-                    with open(focal_file_path, 'w') as f:
-                        json.dump({
-                            'focal_px': float(focallength_px),
-                        }, f)
+                    if focallength_px is not None:
+                        focal_file_name = "focal_" + image_stem + ".json"
+                        focal_file_path = str(outputDirPath / focal_file_name)
+                        with open(focal_file_path, 'w') as f:
+                            json.dump({
+                                'focal_px': float(focallength_px),
+                            }, f)
 
                     vis_file_name = "depth_vis_" + image_stem + ".png"
                     vis_file_path = str(outputDirPath / vis_file_name)
@@ -257,22 +257,25 @@ class DepthPro(desc.Node):
 
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
-                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
+                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                         from matplotlib import pyplot as plt
                         cmap = plt.get_cmap("turbo")
                         colored_depth = cmap(inverse_depth_normalized)[..., :3]
-                        image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio)
+                        image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
             chunk.logger.info('DepthPro end')
         finally:
             chunk.logManager.end()
 
+
 def get_image_paths_list(input_path, extension):
     from pyalicevision import sfmData
     from pyalicevision import sfmDataIO
+    from pyalicevision import camera
     from pathlib import Path
     import itertools
+    import numpy as np
 
     include_suffixes = [extension.lower(), extension.upper()]
     image_paths = []
@@ -285,8 +288,16 @@ def get_image_paths_list(input_path, extension):
             if sfmDataIO.load(dataAV, input_path, sfmDataIO.ALL):
                 views = dataAV.getViews()
                 for id, v in views.items():
-                    image_paths.append(Path(v.getImage().getImagePath()))
-            image_paths.sort()
+                    intrinsicId = v.getIntrinsicId()
+                    intrinsic = dataAV.getIntrinsic(intrinsicId)
+                    scaleOffset = camera.IntrinsicScaleOffset.cast(intrinsic)
+                    focalLength = scaleOffset.getFocalLength()
+                    sensorWidth = scaleOffset.sensorWidth()
+                    focal_x_pix = focalLength * float(scaleOffset.w()) / sensorWidth
+                    image_paths.append((Path(v.getImage().getImagePath()), focal_x_pix))
+
+            image_paths.sort(key=lambda x: x[0])
     else:
         raise ValueError(f"Input path '{input_path}' is not a valid path (folder or sfmData file).")
     return image_paths
+
