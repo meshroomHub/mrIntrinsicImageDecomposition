@@ -300,7 +300,7 @@ class MoGe(desc.Node):
             if chunk.node.halfSizeModel.value:
                 model.half()
 
-            fov_x_ = chunk.node.horizontalFoV.value
+            input_fov = chunk.node.horizontalFoV.value
 
             metadata_deep_model = {}
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "MoGe-2-vitl-normal"
@@ -312,7 +312,7 @@ class MoGe(desc.Node):
                     image_tensor = torch.tensor(img, dtype=torch.float32, device=device).permute(2, 0, 1)
 
                     if chunk.node.automaticFoVEstimation.value:
-                        fov_x_ = chunk_image_paths[idx][1] if chunk.node.foVEstimationMode.value == "Metadata" else None
+                        input_fov = chunk_image_paths[idx][1] if chunk.node.foVEstimationMode.value == "Metadata" else None
 
                     # safe clamp between [0,1] in case of a wrong input cs 
                     image_tensor = torch.clamp(image_tensor, 0, 1)
@@ -320,7 +320,7 @@ class MoGe(desc.Node):
                     resolution_level = chunk.node.resolutionLevel.value
                     num_tokens = None
 
-                    output = model.infer(image_tensor, fov_x=fov_x_, resolution_level=resolution_level, num_tokens=num_tokens, use_fp16=chunk.node.halfSizeModel.value)
+                    output = model.infer(image_tensor, fov_x=input_fov, resolution_level=resolution_level, num_tokens=num_tokens, use_fp16=chunk.node.halfSizeModel.value)
                     points, depth, mask, intrinsics = output['points'].cpu().numpy(), output['depth'].cpu().numpy(), output['mask'].cpu().numpy(), output['intrinsics'].cpu().numpy()
                     normals = output['normal'].cpu().numpy() if 'normal' in output else None
 
@@ -351,6 +351,8 @@ class MoGe(desc.Node):
                         if chunk.node.automaticFoVEstimation.value and chunk.node.foVEstimationMode.value == "Full Auto":
                             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe_fov_x"] = str(180*fov_x/np.pi)
                             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe_fov_y"] = str(180*fov_y/np.pi)
+                        else:
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:input_fov"] = str(input_fov)
                         image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputNormals.value:
                         normals_to_write = normals.astype(np.float32).copy()
