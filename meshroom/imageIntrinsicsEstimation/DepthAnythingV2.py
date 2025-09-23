@@ -64,8 +64,8 @@ class DepthAnythingV2(desc.Node):
         ),
         desc.BoolParam(
             name="halfSizeModel",
-            label="Half Size Model",
-            description="Use Float16 instead of Float32 inside the deep model for much faster inference.",
+            label="Half Bit Depth Model",
+            description="Use Float16 precision instead of Float32 inside the deep model for much faster inference.",
             value=False,
             advanced=True,
         ),
@@ -271,10 +271,11 @@ def get_image_paths_list(input_path, extension):
     include_suffixes = [extension.lower(), extension.upper()]
     image_paths = []
 
-    if Path(input_path).is_dir():
-        image_paths = sorted(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
-    elif Path(input_path).suffix.lower() in [".sfm", ".abc"]:
-        if Path(input_path).exists():
+    inPath = Path(input_path)
+    if inPath.is_dir():
+        image_paths = sorted(itertools.chain(*(inPath.glob(f'*.{suffix}') for suffix in include_suffixes)))
+    elif inPath.suffix.lower() in [".sfm", ".abc"]:
+        if inPath.exists():
             dataAV = sfmData.SfMData()
             if sfmDataIO.load(dataAV, input_path, sfmDataIO.ALL):
                 views = dataAV.getViews()
