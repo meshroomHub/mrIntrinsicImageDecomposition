@@ -349,10 +349,11 @@ class MoGe(desc.Node):
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
                         if chunk.node.automaticFoVEstimation.value and chunk.node.foVEstimationMode.value == "Full Auto":
-                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe_fov_x"] = str(180*fov_x/np.pi)
-                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe_fov_y"] = str(180*fov_y/np.pi)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_x"] = str(180*fov_x/np.pi)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_y"] = str(180*fov_y/np.pi)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov"] = str(180*max(fov_x, fov_y)/np.pi)
                         else:
-                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:input_fov"] = str(input_fov)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:fov"] = str(input_fov)
                         image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputNormals.value:
                         normals_to_write = normals.astype(np.float32).copy()
