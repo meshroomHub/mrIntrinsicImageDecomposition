@@ -206,11 +206,12 @@ class DepthAnythingV2(desc.Node):
             }
 
             encoder = 'vitl'
-            
-            pretrained_path = os.getenv('DEPTHANYTHINGV2_MODELS_PATH') + "/depth_anything_v2"
+
+            model_name = 'depth_anything_v2'
             if chunk.node.metricModel.value:
-                pretrained_path += f'_metric_{metric_model_types[chunk.node.metricModelType.value]}'
-            pretrained_path += f'_{encoder}.pth'
+                model_name += f'_metric_{metric_model_types[chunk.node.metricModelType.value]}'
+            model_name += f'_{encoder}'
+            pretrained_path = os.getenv('DEPTHANYTHINGV2_MODELS_PATH') + '/' + model_name + '.pth'
 
             if chunk.node.metricModel.value:
                 depth_anything = DepthAnythingV2(**{**model_configs[encoder], 'max_depth': chunk.node.maxDepth.value})
@@ -221,6 +222,10 @@ class DepthAnythingV2(desc.Node):
             
             if chunk.node.halfSizeModel.value:
                 depth_anything.half()
+
+            metadata_deep_model = {}
+            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = model_name
+            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "2025.05.30"
 
             for idx, path in enumerate(chunk_image_paths):
                 with torch.no_grad():
@@ -247,7 +252,7 @@ class DepthAnythingV2(desc.Node):
 
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
-                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio)
+                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                         import matplotlib
                         if chunk.node.metricModel.value:
@@ -256,7 +261,7 @@ class DepthAnythingV2(desc.Node):
                         else:
                             cmap = matplotlib.colormaps.get_cmap('Spectral_r')
                         colored_depth = cmap(depth)[:, :, :3]
-                        image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio)
+                        image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
             chunk.logger.info('DepthAnything2 end')
         finally:
