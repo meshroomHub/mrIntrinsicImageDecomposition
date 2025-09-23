@@ -225,10 +225,13 @@ class DepthPro(desc.Node):
                     focallength_px = None
                     if f_px is not None:
                         focallength_px = f_px
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:inputFocalPix"] = str(focallength_px)
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:focalPix"] = str(focallength_px)
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:fov"] = str(chunk_image_paths[idx][2])
                     elif prediction["focallength_px"] is not None:
                         focallength_px = prediction["focallength_px"].detach().cpu().item()
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DepthProFocalPix"] = str(focallength_px)
+                        fov_x_deg = 360 * np.arctan(w_ori / (2 * focallength_px)) / np.pi
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DepthPro:focalPix"] = str(focallength_px)
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DepthPro:fov"] = str(fov_x_deg)
 
                     inverse_depth = 1 / depth
                     # Visualize inverse depth instead of depth, clipped to [0.1m;250m] range for better visualization.
@@ -294,7 +297,8 @@ def get_image_paths_list(input_path, extension):
                     focalLength = scaleOffset.getFocalLength()
                     sensorWidth = scaleOffset.sensorWidth()
                     focal_x_pix = focalLength * float(scaleOffset.w()) / sensorWidth
-                    image_paths.append((Path(v.getImage().getImagePath()), focal_x_pix))
+                    fov_x_deg = 2 * 180 * np.arctan(sensorWidth / ( 2 * focalLength)) / np.pi
+                    image_paths.append((Path(v.getImage().getImagePath()), focal_x_pix, fov_x_deg))
 
             image_paths.sort(key=lambda x: x[0])
     else:
