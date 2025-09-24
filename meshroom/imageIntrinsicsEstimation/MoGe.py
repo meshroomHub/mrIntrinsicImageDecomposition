@@ -3,12 +3,12 @@ __version__ = "1.0"
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
 
+from pathlib import Path
+
 class MoGeNodeSize(desc.MultiDynamicNodeSize):
     def computeSize(self, node):
         if node.attribute(self._params[0]).isLink:
             return node.attribute(self._params[0]).inputLink.node.size
-
-        from pathlib import Path
 
         input_path_param = node.attribute(self._params[0])
         extension_param = node.attribute(self._params[1])
@@ -82,7 +82,7 @@ class MoGe(desc.Node):
             values=["Full Auto", "Metadata"],
             value="Full Auto",
             exclusive=True,
-            enabled=lambda node: node.automaticFoVEstimation.value
+            enabled=lambda node: node.automaticFoVEstimation.value and not Path(node.inputImages.value).is_dir()
         ),
         desc.BoolParam(
             name="halfSizeModel",
@@ -263,7 +263,6 @@ class MoGe(desc.Node):
         import json
         import os
         import numpy as np
-        from pathlib import Path
 
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
@@ -302,7 +301,10 @@ class MoGe(desc.Node):
                     image_tensor = torch.tensor(img, dtype=torch.float32, device=device).permute(2, 0, 1)
 
                     if chunk.node.automaticFoVEstimation.value:
-                        input_fov = chunk_image_paths[idx][1] if chunk.node.foVEstimationMode.value == "Metadata" else None
+                        if chunk.node.foVEstimationMode.value == "Metadata" and chunk_image_paths[idx][1] > 0:
+                            input_fov = chunk_image_paths[idx][1]
+                        else:
+                            input_fov = None
 
                     # safe clamp between [0,1] in case of a wrong input cs 
                     image_tensor = torch.clamp(image_tensor, 0, 1)
@@ -338,7 +340,8 @@ class MoGe(desc.Node):
 
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
-                        if chunk.node.automaticFoVEstimation.value and chunk.node.foVEstimationMode.value == "Full Auto":
+                        if chunk.node.automaticFoVEstimation.value and \
+                           (chunk.node.foVEstimationMode.value == "Full Auto" or Path(chunk.node.inputImages.value).is_dir()):
                             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_x"] = str(180*fov_x/np.pi)
                             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_y"] = str(180*fov_y/np.pi)
                             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov"] = str(180*max(fov_x, fov_y)/np.pi)
@@ -427,6 +430,7 @@ def get_image_paths_list(input_path, extension):
 
     if Path(input_path).is_dir():
         image_paths = sorted(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
+        image_paths = [(p, -1.0) for p in image_paths]
     elif Path(input_path).suffix.lower() in [".sfm", ".abc"]:
         if Path(input_path).exists():
             dataAV = sfmData.SfMData()
