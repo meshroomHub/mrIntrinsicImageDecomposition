@@ -3,12 +3,12 @@ __version__ = "1.0"
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
 
+from pathlib import Path
+
 class DepthProNodeSize(desc.MultiDynamicNodeSize):
     def computeSize(self, node):
         if node.attribute(self._params[0]).isLink:
             return node.attribute(self._params[0]).inputLink.node.size
-
-        from pathlib import Path
 
         input_path_param = node.attribute(self._params[0])
         extension_param = node.attribute(self._params[1])
@@ -68,13 +68,20 @@ class DepthPro(desc.Node):
             value=False,
             advanced=True,
         ),
+        desc.BoolParam(
+            name="automaticFocalEstimation",
+            label="Automatic Focal Estimation",
+            description="If this option is enabled, the Depth model will estimate the focal in pixels.",
+            value=True,
+        ),
         desc.ChoiceParam(
-            name="focalInputMode",
-            label="Focal Input Mode",
-            description="Focal estimation mode.",
-            values=["Manual", "Metadata", "Auto"],
-            value="Metadata",
+            name="focalEstimationMode",
+            label="Focal Estimation Mode",
+            description="Select how focal is estimated. If 'Full Auto' is selected, it is estimated by the deep Network.",
+            values=["Full Auto", "Metadata"],
+            value="Full Auto",
             exclusive=True,
+            enabled=lambda node: node.automaticFocalEstimation.value and not Path(node.inputImages.value).is_dir()
         ),
         desc.FloatParam(
             name="focalpix",
@@ -163,7 +170,6 @@ class DepthPro(desc.Node):
         import json
         import os
         import numpy as np
-        from pathlib import Path
 
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
@@ -195,6 +201,8 @@ class DepthPro(desc.Node):
             )
             model.eval()
 
+            f_px = chunk.node.focalpix.value
+
             metadata_deep_model = {}
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "depth_pro"
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "2025.09.18"
@@ -203,11 +211,11 @@ class DepthPro(desc.Node):
                 with torch.no_grad():
                     img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
 
-                    f_px = None
-                    if chunk.node.focalInputMode.value == "Manual":
-                        f_px = chunk.node.focalpix.value
-                    elif chunk.node.focalInputMode.value == "Metadata":
-                        f_px = chunk_image_paths[idx][1]
+                    if chunk.node.automaticFocalEstimation.value:
+                        if chunk.node.focalEstimationMode.value == "Metadata" and chunk_image_paths[idx][1] > 0:
+                            f_px = chunk_image_paths[idx][1]
+                        else:
+                            f_px = None
 
                     f_px_tt = torch.tensor(f_px) if f_px is not None else f_px
 
@@ -215,16 +223,23 @@ class DepthPro(desc.Node):
 
                     prediction = model.infer(transform(img_clip), f_px=f_px_tt)
                     depth = prediction["depth"].detach().cpu().numpy().squeeze()
+
                     focallength_px = None
-                    if f_px is not None:
-                        focallength_px = f_px
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:focalPix"] = str(focallength_px)
-                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:fov"] = str(chunk_image_paths[idx][2])
-                    elif prediction["focallength_px"] is not None:
+
+                    if chunk.node.automaticFocalEstimation.value and \
+                        (chunk.node.focalEstimationMode.value == "Full Auto" or Path(chunk.node.inputImages.value).is_dir()):
                         focallength_px = prediction["focallength_px"].detach().cpu().item()
                         fov_x_deg = 360 * np.arctan(w_ori / (2 * focallength_px)) / np.pi
                         metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DepthPro:focalPix"] = str(focallength_px)
                         metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DepthPro:fov"] = str(fov_x_deg)
+                    else:
+                        focallength_px = f_px
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:focalPix"] = str(focallength_px)
+                        if chunk_image_paths[idx][2] > 0:
+                            input_fov = chunk_image_paths[idx][2]
+                        else:
+                            input_fov = 360 * np.arctan(w_ori / (2 * focallength_px)) / np.pi
+                        metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:fov"] = str(input_fov)
 
                     inverse_depth = 1 / depth
                     # Visualize inverse depth instead of depth, clipped to [0.1m;250m] range for better visualization.
@@ -278,6 +293,7 @@ def get_image_paths_list(input_path, extension):
 
     if Path(input_path).is_dir():
         image_paths = sorted(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
+        image_paths = [(p, -1.0, -1.0) for p in image_paths]
     elif Path(input_path).suffix.lower() in [".sfm", ".abc"]:
         if Path(input_path).exists():
             dataAV = sfmData.SfMData()
