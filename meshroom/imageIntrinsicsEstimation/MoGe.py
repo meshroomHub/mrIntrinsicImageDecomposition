@@ -1,6 +1,5 @@
 __version__ = "1.0"
 
-from re import M
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
 
@@ -184,8 +183,7 @@ class MoGe(desc.Node):
             label="Normal Map",
             description="Output normal map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/normals_<FILESTEM>.exr",
-            group="",
+            value="{nodeCacheFolder}/normals_<FILESTEM>.exr",
             enabled=lambda node: node.outputNormals.value,
         ),
         desc.File(
@@ -193,8 +191,7 @@ class MoGe(desc.Node):
             label="Colored Normal Map",
             description="Output colored normal map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
-            group="",
+            value="{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputNormals.value and node.saveVisuImages.value,
         ),
         desc.File(
@@ -202,8 +199,7 @@ class MoGe(desc.Node):
             label="Depth Map",
             description="Output depth map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
-            group="",
+            value="{nodeCacheFolder}/depth_<FILESTEM>.exr",
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
@@ -211,8 +207,7 @@ class MoGe(desc.Node):
             label="Colored Depth Map",
             description="Output colored depth map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
-            group="",
+            value="{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
         desc.File(
@@ -220,31 +215,27 @@ class MoGe(desc.Node):
             label="Mask",
             description="Edge mask",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/mask_<FILESTEM>.exr",
-            group="",
+            value="{nodeCacheFolder}/mask_<FILESTEM>.exr",
             enabled=lambda node: node.outputMask.value
         ),
         desc.File(
             name="Fov",
             label="Field Of View",
             description="Output fields of view Fov_x, Fov_y in a json file",
-            value=lambda attr: "{nodeCacheFolder}/fov_<FILESTEM>.json",
-            group="",
+            value="{nodeCacheFolder}/fov_<FILESTEM>.json",
         ),
         desc.File(
             name="MeshPly",
             label="Estimated Mesh .ply",
             description="Output mesh in ply format",
-            value=lambda attr: "{nodeCacheFolder}/mesh_<FILESTEM>.ply",
-            group="",
+            value="{nodeCacheFolder}/mesh_<FILESTEM>.ply",
             enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "ply"],
         ),
         desc.File(
             name="MeshGlb",
             label="Estimated Mesh .glb",
             description="Output mesh in glb format",
-            value=lambda attr: "{nodeCacheFolder}/mesh_<FILESTEM>.glb",
-            group="",
+            value="{nodeCacheFolder}/mesh_<FILESTEM>.glb",
             enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "glb"],
         ),
     ]
@@ -269,7 +260,6 @@ class MoGe(desc.Node):
 
         import torch
         from img_proc import image
-        from img_proc.depth_map import colorize_depth
         import json
         import os
         import numpy as np
