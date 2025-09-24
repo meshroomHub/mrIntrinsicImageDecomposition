@@ -124,8 +124,7 @@ class DepthPro(desc.Node):
             label="Depth Map",
             description="Output depth map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
-            group="",
+            value="{nodeCacheFolder}/depth_<FILESTEM>.exr",
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
@@ -133,16 +132,14 @@ class DepthPro(desc.Node):
             label="Colored Depth Map",
             description="Output colored depth map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
-            group="",
+            value="{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
         desc.File(
             name="Focal",
             label="Estimated Focal in pixels",
             description="Focal used for the metric depth estimation in a json file",
-            value=lambda attr: "{nodeCacheFolder}/focal_px_<FILESTEM>.json",
-            group="",
+            value="{nodeCacheFolder}/focal_px_<FILESTEM>.json",
         ),
     ]
 
@@ -160,12 +157,9 @@ class DepthPro(desc.Node):
     def processChunk(self, chunk):
         from depth_pro import create_model_and_transforms
         from depth_pro.depth_pro import DepthProConfig
-        from pyalicevision import sfmData
-        from pyalicevision import image as avimg
 
         import torch
         from img_proc import image
-        from img_proc.depth_map import colorize_depth
         import json
         import os
         import numpy as np
