@@ -1,15 +1,14 @@
 __version__ = "1.0"
 
-from re import M
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
+
+from pathlib import Path
 
 class MoGeNodeSize(desc.MultiDynamicNodeSize):
     def computeSize(self, node):
         if node.attribute(self._params[0]).isLink:
             return node.attribute(self._params[0]).inputLink.node.size
-
-        from pathlib import Path
 
         input_path_param = node.attribute(self._params[0])
         extension_param = node.attribute(self._params[1])
@@ -63,18 +62,27 @@ class MoGe(desc.Node):
             exclusive=True,
         ),
         desc.BoolParam(
-            name="automaticFOVEstimation",
-            label="Automatic FOV Estimation",
-            description="If this option is enabled, the MoGe model will estimate the field of view.",
+            name="automaticFoVEstimation",
+            label="Automatic FoV Estimation",
+            description="If this option is enabled, the MoGe model will estimate the field of view in degree.",
             value=True,
         ),
         desc.FloatParam(
-            name="horizontalFov",
-            label="Horizontal FOV",
+            name="horizontalFoV",
+            label="Horizontal FoV [deg]",
             value=50.0,
-            description="If camera parameters are known, set the horizontal field of view in degrees.",
-            range=(0.0, 360.0, 1.0),
-            enabled=lambda node: not node.automaticFOVEstimation.value
+            description="If camera parameters are known, set the horizontal field of view in degree.",
+            range=(0.0, 180.0, 1.0),
+            enabled=lambda node: not node.automaticFoVEstimation.value
+        ),
+        desc.ChoiceParam(
+            name="foVEstimationMode",
+            label="FoV Estimation Mode",
+            description="Select how field of view is estimated. If 'Full Auto' is selected, it is estimated by the deep Network.",
+            values=["Full Auto", "Metadata"],
+            value="Full Auto",
+            exclusive=True,
+            enabled=lambda node: node.automaticFoVEstimation.value and not Path(node.inputImages.value).is_dir()
         ),
         desc.BoolParam(
             name="halfSizeModel",
@@ -175,8 +183,7 @@ class MoGe(desc.Node):
             label="Normal Map",
             description="Output normal map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/normals_<FILESTEM>.exr",
-            group="",
+            value="{nodeCacheFolder}/normals_<FILESTEM>.exr",
             enabled=lambda node: node.outputNormals.value,
         ),
         desc.File(
@@ -184,8 +191,7 @@ class MoGe(desc.Node):
             label="Colored Normal Map",
             description="Output colored normal map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
-            group="",
+            value="{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputNormals.value and node.saveVisuImages.value,
         ),
         desc.File(
@@ -193,8 +199,7 @@ class MoGe(desc.Node):
             label="Depth Map",
             description="Output depth map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
-            group="",
+            value="{nodeCacheFolder}/depth_<FILESTEM>.exr",
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
@@ -202,8 +207,7 @@ class MoGe(desc.Node):
             label="Colored Depth Map",
             description="Output colored depth map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
-            group="",
+            value="{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
         desc.File(
@@ -211,31 +215,27 @@ class MoGe(desc.Node):
             label="Mask",
             description="Edge mask",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/mask_<FILESTEM>.exr",
-            group="",
+            value="{nodeCacheFolder}/mask_<FILESTEM>.exr",
             enabled=lambda node: node.outputMask.value
         ),
         desc.File(
             name="Fov",
             label="Field Of View",
             description="Output fields of view Fov_x, Fov_y in a json file",
-            value=lambda attr: "{nodeCacheFolder}/fov_<FILESTEM>.json",
-            group="",
+            value="{nodeCacheFolder}/fov_<FILESTEM>.json",
         ),
         desc.File(
             name="MeshPly",
             label="Estimated Mesh .ply",
             description="Output mesh in ply format",
-            value=lambda attr: "{nodeCacheFolder}/mesh_<FILESTEM>.ply",
-            group="",
+            value="{nodeCacheFolder}/mesh_<FILESTEM>.ply",
             enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "ply"],
         ),
         desc.File(
             name="MeshGlb",
             label="Estimated Mesh .glb",
             description="Output mesh in glb format",
-            value=lambda attr: "{nodeCacheFolder}/mesh_<FILESTEM>.glb",
-            group="",
+            value="{nodeCacheFolder}/mesh_<FILESTEM>.glb",
             enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "glb"],
         ),
     ]
@@ -260,11 +260,9 @@ class MoGe(desc.Node):
 
         import torch
         from img_proc import image
-        from img_proc.depth_map import colorize_depth
         import json
         import os
         import numpy as np
-        from pathlib import Path
 
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
@@ -291,7 +289,7 @@ class MoGe(desc.Node):
             if chunk.node.halfSizeModel.value:
                 model.half()
 
-            fov_x_ =  None if chunk.node.automaticFOVEstimation.value else chunk.node.horizontalFov.value
+            input_fov = chunk.node.horizontalFoV.value
 
             metadata_deep_model = {}
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "MoGe-2-vitl-normal"
@@ -299,8 +297,14 @@ class MoGe(desc.Node):
 
             for idx, path in enumerate(chunk_image_paths):
                 with torch.no_grad():
-                    img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
+                    img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
                     image_tensor = torch.tensor(img, dtype=torch.float32, device=device).permute(2, 0, 1)
+
+                    if chunk.node.automaticFoVEstimation.value:
+                        if chunk.node.foVEstimationMode.value == "Metadata" and chunk_image_paths[idx][1] > 0:
+                            input_fov = chunk_image_paths[idx][1]
+                        else:
+                            input_fov = None
 
                     # safe clamp between [0,1] in case of a wrong input cs 
                     image_tensor = torch.clamp(image_tensor, 0, 1)
@@ -308,13 +312,15 @@ class MoGe(desc.Node):
                     resolution_level = chunk.node.resolutionLevel.value
                     num_tokens = None
 
-                    output = model.infer(image_tensor, fov_x=fov_x_, resolution_level=resolution_level, num_tokens=num_tokens, use_fp16=chunk.node.halfSizeModel.value)
+                    output = model.infer(image_tensor, fov_x=input_fov, resolution_level=resolution_level, num_tokens=num_tokens, use_fp16=chunk.node.halfSizeModel.value)
                     points, depth, mask, intrinsics = output['points'].cpu().numpy(), output['depth'].cpu().numpy(), output['mask'].cpu().numpy(), output['intrinsics'].cpu().numpy()
                     normals = output['normal'].cpu().numpy() if 'normal' in output else None
 
+                    fov_x, fov_y = utils3d.numpy.intrinsics_to_fov(intrinsics)
+
                     # Write outputs
                     outputDirPath = Path(chunk.node.output.value)
-                    image_stem = Path(chunk_image_paths[idx]).stem
+                    image_stem = Path(chunk_image_paths[idx][0]).stem
 
                     image_stem = str(image_stem)
 
@@ -334,6 +340,13 @@ class MoGe(desc.Node):
 
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
+                        if chunk.node.automaticFoVEstimation.value and \
+                           (chunk.node.foVEstimationMode.value == "Full Auto" or Path(chunk.node.inputImages.value).is_dir()):
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_x"] = str(180*fov_x/np.pi)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_y"] = str(180*fov_y/np.pi)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov"] = str(180*max(fov_x, fov_y)/np.pi)
+                        else:
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:fov"] = str(input_fov)
                         image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputNormals.value:
                         normals_to_write = normals.astype(np.float32).copy()
@@ -352,8 +365,6 @@ class MoGe(desc.Node):
                         mask_to_write = mask.astype(np.float32).copy()
                         mask_to_write = mask_to_write[:,:,np.newaxis]
                         image.writeImage(mask_file_path, mask_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
-
-                    fov_x, fov_y = utils3d.numpy.intrinsics_to_fov(intrinsics)
 
                     fov_file_name = "fov_" + image_stem + ".json"
                     fov_file_path = str(outputDirPath / fov_file_name)
@@ -409,22 +420,32 @@ class MoGe(desc.Node):
 def get_image_paths_list(input_path, extension):
     from pyalicevision import sfmData
     from pyalicevision import sfmDataIO
+    from pyalicevision import camera
     from pathlib import Path
     import itertools
+    import numpy as np
 
     include_suffixes = [extension.lower(), extension.upper()]
     image_paths = []
 
     if Path(input_path).is_dir():
         image_paths = sorted(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
+        image_paths = [(p, -1.0) for p in image_paths]
     elif Path(input_path).suffix.lower() in [".sfm", ".abc"]:
         if Path(input_path).exists():
             dataAV = sfmData.SfMData()
             if sfmDataIO.load(dataAV, input_path, sfmDataIO.ALL):
                 views = dataAV.getViews()
                 for id, v in views.items():
-                    image_paths.append(Path(v.getImage().getImagePath()))
-            image_paths.sort()
+                    intrinsicId = v.getIntrinsicId()
+                    intrinsic = dataAV.getIntrinsic(intrinsicId)
+                    scaleOffset = camera.IntrinsicScaleOffset.cast(intrinsic)
+                    focalLength = scaleOffset.getFocalLength()
+                    sensorWidth = scaleOffset.sensorWidth()
+                    fov_x_deg = 2 * 180 * np.arctan(sensorWidth / ( 2 *focalLength)) / np.pi
+                    image_paths.append((Path(v.getImage().getImagePath()), fov_x_deg))
+
+            image_paths.sort(key=lambda x: x[0])
     else:
         raise ValueError(f"Input path '{input_path}' is not a valid path (folder or sfmData file).")
     return image_paths
