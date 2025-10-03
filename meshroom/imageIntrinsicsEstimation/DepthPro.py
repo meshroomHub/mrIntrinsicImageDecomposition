@@ -165,6 +165,8 @@ class DepthPro(desc.Node):
         from depth_pro import create_model_and_transforms
         from depth_pro.depth_pro import DepthProConfig
 
+        from pyalicevision import image as avimg
+
         import torch
         from img_proc import image
         import json
@@ -266,9 +268,14 @@ class DepthPro(desc.Node):
                     depth_file_name = "depth_" + image_stem + ".exr"
                     depth_file_path = str(outputDirPath / depth_file_name)
 
+                    optWrite = avimg.ImageWriteOptions()
+                    optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
-                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                        optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("DWAA"))
+                        optWrite.exrCompressionLevel(45)
+                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model,optWrite)
                     if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                         from matplotlib import pyplot as plt
                         cmap = plt.get_cmap("turbo")

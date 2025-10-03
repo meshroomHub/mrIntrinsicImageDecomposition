@@ -86,7 +86,7 @@ def loadImage(imagePath: str, applyPAR: bool = False, applyOrientation: bool = T
 
     return (oiio_image, h, w, pixelAspectRatio, orientation)
 
-def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orientation: int = 1, pixelAspectRatio: float = 1.0, metadata=None) -> None:
+def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orientation: int = 1, pixelAspectRatio: float = 1.0, metadata=None, optWrite=None) -> None:
     if metadata is None:
         metadata = {}
     if orientation > 1:
@@ -122,12 +122,17 @@ def writeImage(imagePath: str, image: np.ndarray, h_tgt: int, w_tgt: int, orient
             av_image = avimg.Image_RGBAfColor()
     av_image.fromNumpyArray(image)
 
-    optWrite = avimg.ImageWriteOptions()
-    if Path(imagePath).suffix.lower() == ".exr":
-        optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+    if optWrite is None:
+        optWrite = avimg.ImageWriteOptions()
+        if Path(imagePath).suffix.lower() == ".exr":
+            optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+            compression = "zips"
+        else:
+            optWrite.toColorSpace(avimg.EImageColorSpace_SRGB)
+            compression = ""
     else:
-        optWrite.toColorSpace(avimg.EImageColorSpace_SRGB)
-    compression = "zips" if Path(imagePath).suffix.lower() == ".exr" else ""
+        compression = avimg.EImageExrCompression_enumToString(optWrite.getExrCompressionMethod())
+
     oiio_params = avimg.oiioParams(orientation, pixelAspectRatio, compression)
 
     for name, value in metadata.items():

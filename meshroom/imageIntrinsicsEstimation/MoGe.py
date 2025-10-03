@@ -255,8 +255,9 @@ class MoGe(desc.Node):
         from moge.model import import_model_class_by_version
         from moge.utils.io import save_glb, save_ply
         from moge.utils.vis import colorize_depth, colorize_normal
-        from moge.utils.geometry_numpy import depth_occlusion_edge_numpy
         import utils3d
+
+        from pyalicevision import image as avimg
 
         import torch
         from img_proc import image
@@ -344,6 +345,9 @@ class MoGe(desc.Node):
                     mask_file_name = "mask_" + image_stem + ".exr"
                     mask_file_path = str(outputDirPath / mask_file_name)
 
+                    optWrite = avimg.ImageWriteOptions()
+                    optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
                         if chunk.node.automaticFoVEstimation.value and \
@@ -353,11 +357,15 @@ class MoGe(desc.Node):
                             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov"] = str(180*max(fov_x, fov_y)/np.pi)
                         else:
                             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:fov"] = str(input_fov)
-                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                        optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("DWAA"))
+                        optWrite.exrCompressionLevel(45)
+                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model, optWrite)
                     if chunk.node.outputNormals.value:
                         normals_to_write = normals.astype(np.float32).copy()
                         normals_to_write = normals_to_write * np.array([1, -1, -1], dtype=np.float32)
-                        image.writeImage(normals_file_path, normals_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                        optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("PIZ"))
+                        optWrite.storageDataType(avimg.EStorageDataType_stringToEnum("half"))
+                        image.writeImage(normals_file_path, normals_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model, optWrite)
                     if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                         colored_depth = colorize_depth(depth).copy()
                         image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)

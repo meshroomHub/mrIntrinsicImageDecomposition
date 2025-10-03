@@ -171,6 +171,8 @@ class DepthAnythingV2(desc.Node):
         else:
             from depth_anything_v2.dpt import DepthAnythingV2
 
+        from pyalicevision import image as avimg
+
         import torch
         from img_proc import image
         from img_proc.depth_map import colorize_depth
@@ -250,9 +252,14 @@ class DepthAnythingV2(desc.Node):
                     depth_file_name = "depth_" + image_stem + ".exr"
                     depth_file_path = str(outputDirPath / depth_file_name)
 
+                    optWrite = avimg.ImageWriteOptions()
+                    optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+
                     if chunk.node.outputDepth.value:
                         depth_to_write = depth[:,:,np.newaxis]
-                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                        optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("DWAA"))
+                        optWrite.exrCompressionLevel(45)
+                        image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model, optWrite)
                     if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                         import matplotlib
                         if chunk.node.metricModel.value:
