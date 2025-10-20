@@ -264,6 +264,12 @@ class MoGe(desc.Node):
         import os
         import numpy as np
 
+        if chunk.range.start >= len(self.image_paths):
+            chunk.logManager.start(chunk.node.verboseLevel.value)
+            chunk.logger.info(Empty chunk.')
+            chunk.logManager.end()
+            return
+
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
             if not chunk.node.inputImages.value:
