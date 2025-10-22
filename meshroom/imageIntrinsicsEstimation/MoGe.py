@@ -266,7 +266,7 @@ class MoGe(desc.Node):
 
         if chunk.range.start >= len(self.image_paths):
             chunk.logManager.start(chunk.node.verboseLevel.value)
-            chunk.logger.info(Empty chunk.')
+            chunk.logger.info('Empty chunk.')
             chunk.logManager.end()
             return
 
