@@ -196,8 +196,12 @@ def search_partial_depth(depth_dir, depth_ext, img_path, img_meta, logger):
                 input_depth, h_depth, w_depth, par_depth, orientation_depth = image.loadImage(input_depth_map_file_path, applyPAR = True, clipHigh = 1000.0, colorSpace = avimg.EImageColorSpace_NO_CONVERSION)
                 if (h_depth, w_depth, par_depth, orientation_depth) == img_meta:
                     input_depth = input_depth[:,:,0]
+                else:
+                    logger.warning(f"Partial depth map format does not match input image format")
 
             input_depth_out = (input_depth, input_depth_map_file_path)
+        else:
+            logger.warning(f"No partial depth map found for input image {input_depth_map_file_path}")
 
     return input_depth_out
 

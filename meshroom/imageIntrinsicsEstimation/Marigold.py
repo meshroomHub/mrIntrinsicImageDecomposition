@@ -58,7 +58,7 @@ class Marigold(desc.Node):
         desc.File(
             name="inputDepthMaps",
             label="Input Depth Maps",
-            description="Input partial depth maps. Folder path.",
+            description="Input partial depth maps. Folder path. Partial depth maps must have the same size, orientation and pixel aspect ratio than input images.",
             value="",
         ),
         desc.ChoiceParam(
@@ -318,12 +318,12 @@ class Marigold(desc.Node):
 
                 if not chunk.node.inputDepthMaps.isLink:
                     from marigold import MarigoldDepthPipeline, MarigoldDepthOutput
-                    chunk.logger.info('Depth completion mode enabled')
                     pipe: MarigoldDepthPipeline = loadPipe.loadPipe("depth")
                     denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 1;
                     ensemble_size = chunk.node.ensembleSize.value if chunk.node.ensembleSize.value > 0 else 10;
                 else:
                     from marigold_utils.marigold_dc import MarigoldDepthCompletionPipeline, search_partial_depth
+                    chunk.logger.info('Depth completion mode enabled')
                     pipe: MarigoldDepthCompletionPipeline = loadPipe.loadPipe("depthCompletion")
                     # if not torch.cuda.is_available():
                     #     import diffusers
