@@ -289,6 +289,7 @@ class Marigold(desc.Node):
         import numpy as np
         from pathlib import Path
         from PIL import Image
+        from pyalicevision import image as avimg
 
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
@@ -411,8 +412,12 @@ class Marigold(desc.Node):
                             # Save as npy
                             np.save(depth_file_path, depth_pred)
                         else:
+                            optWrite = avimg.ImageWriteOptions()
+                            optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+                            optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("DWAA"))
+                            optWrite.exrCompressionLevel(45)
                             depth_to_save = depth_pred[:,:,np.newaxis].copy()
-                            image.writeImage(depth_file_path, depth_to_save, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                            image.writeImage(depth_file_path, depth_to_save, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model, optWrite)
                             if input_depth is not None:
                                 minDepth = depth_pred.min()
                                 maxDepth = depth_pred.max()
@@ -487,8 +492,12 @@ class Marigold(desc.Node):
                             # Save as npy
                             np.save(normals_file_path, normals_pred)
                         else:
+                            optWrite = avimg.ImageWriteOptions()
+                            optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
+                            optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("PIZ"))
+                            optWrite.storageDataType(avimg.EStorageDataType_stringToEnum("half"))
                             normals_to_save = np.transpose(normals_pred, (1, 2, 0)).copy()
-                            image.writeImage(normals_file_path, normals_to_save, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
+                            image.writeImage(normals_file_path, normals_to_save, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model, optWrite)
 
                         if chunk.node.saveVisuImages.value:
                             # Save Colorize
