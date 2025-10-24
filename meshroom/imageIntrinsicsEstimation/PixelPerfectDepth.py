@@ -50,7 +50,7 @@ class PixelPerfectDepth(desc.Node):
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Input images to process. Folder path or sfmData filepath",
+            description="Input images to process. Folder path or SfMData filepath.",
             value="",
         ),
         desc.ChoiceParam(
@@ -66,7 +66,7 @@ class PixelPerfectDepth(desc.Node):
             name="samplingStep",
             label="Sampling Steps",
             value=10,
-            description="Number of sampling steps of diffusion model",
+            description="Number of sampling steps of diffusion model.",
             range=(1, 100, 1),
         ),
         desc.BoolParam(
@@ -77,15 +77,15 @@ class PixelPerfectDepth(desc.Node):
         ),
         desc.BoolParam(
             name="saveVisuImages",
-            label="Save images for visualization",
-            description="Save additional png images for depth map.",
+            label="Save Images For Visualization",
+            description="Save additional colored PNG images for depth maps.",
             value=False,
         ),
         desc.IntParam(
             name="blockSize",
             label="Block Size",
-            value=50,
             description="Sets the number of images to process in one chunk. If set to 0, all images are processed at once.",
+            value=50,
             range=(0, 1000, 1),
         ),
         desc.ChoiceParam(
@@ -101,13 +101,13 @@ class PixelPerfectDepth(desc.Node):
         desc.File(
             name='output',
             label='Output Folder',
-            description="Output folder containing the normal maps saved as exr images.",
+            description="Output folder containing the normal maps saved as EXR images.",
             value="{nodeCacheFolder}",
         ),
         desc.File(
             name="DepthMap",
-            label="Depth Map",
-            description="Output depth map",
+            label="Depth Maps",
+            description="Generated depth maps.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
             group="",
@@ -115,8 +115,8 @@ class PixelPerfectDepth(desc.Node):
         ),
         desc.File(
             name="DepthMapColor",
-            label="Colored Depth Map",
-            description="Output colored depth map",
+            label="Colored Depth Maps",
+            description="Generated colored depth maps.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             group="",
