@@ -25,7 +25,9 @@
                 -45
             ],
             "inputs": {
-                "inputFiles": "{Marigold_1.output}"
+                "inputFiles": [
+                    "{Marigold_1.output}"
+                ]
             }
         },
         "Marigold_1": {
