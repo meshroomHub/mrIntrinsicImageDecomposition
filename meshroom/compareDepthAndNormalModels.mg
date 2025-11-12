@@ -18,16 +18,16 @@
         "CameraInit_1": {
             "nodeType": "CameraInit",
             "position": [
-                -294,
-                98
+                0,
+                0
             ],
             "inputs": {}
         },
         "CopyFiles_1": {
             "nodeType": "CopyFiles",
             "position": [
-                536,
-                74
+                600,
+                0
             ],
             "inputs": {
                 "inputFiles": [
@@ -43,8 +43,8 @@
         "DepthAnythingV2_1": {
             "nodeType": "DepthAnythingV2",
             "position": [
-                280,
-                -81
+                400,
+                -160
             ],
             "inputs": {
                 "inputImages": "{CameraInit_1.output}",
@@ -55,8 +55,8 @@
         "DepthPro_1": {
             "nodeType": "DepthPro",
             "position": [
-                -19,
-                285
+                200,
+                150
             ],
             "inputs": {
                 "inputImages": "{CameraInit_1.output}",
@@ -66,8 +66,8 @@
         "Marigold_1": {
             "nodeType": "Marigold",
             "position": [
-                -20,
-                18
+                200,
+                -100
             ],
             "inputs": {
                 "inputImages": "{CameraInit_1.output}",
@@ -79,8 +79,8 @@
         "MoGe_1": {
             "nodeType": "MoGe",
             "position": [
-                -14,
-                -141
+                200,
+                -250
             ],
             "inputs": {
                 "inputImages": "{CameraInit_1.output}",
@@ -90,8 +90,8 @@
         "PixelPerfectDepth_1": {
             "nodeType": "PixelPerfectDepth",
             "position": [
-                262,
-                275
+                400,
+                100
             ],
             "inputs": {
                 "inputImages": "{CameraInit_1.output}",
@@ -101,8 +101,8 @@
         "StableNormal_1": {
             "nodeType": "StableNormal",
             "position": [
-                -27,
-                180
+                200,
+                50
             ],
             "inputs": {
                 "inputImages": "{CameraInit_1.output}"

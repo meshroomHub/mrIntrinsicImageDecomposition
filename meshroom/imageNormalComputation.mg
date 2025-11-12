@@ -13,16 +13,16 @@
         "CameraInit_1": {
             "nodeType": "CameraInit",
             "position": [
-                -298,
-                -54
+                0,
+                0
             ],
             "inputs": {}
         },
         "CopyFiles_1": {
             "nodeType": "CopyFiles",
             "position": [
-                188,
-                -43
+                400,
+                0
             ],
             "inputs": {
                 "inputFiles": [
@@ -33,8 +33,8 @@
         "MoGe_1": {
             "nodeType": "MoGe",
             "position": [
-                -47,
-                -54
+                200,
+                0
             ],
             "inputs": {
                 "inputImages": "{CameraInit_1.output}",

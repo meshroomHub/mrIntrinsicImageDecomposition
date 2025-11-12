@@ -13,16 +13,16 @@
         "CameraInit_1": {
             "nodeType": "CameraInit",
             "position": [
-                -262,
-                -55
+                0,
+                0
             ],
             "inputs": {}
         },
         "CopyFiles_1": {
             "nodeType": "CopyFiles",
             "position": [
-                155,
-                -45
+                400,
+                0
             ],
             "inputs": {
                 "inputFiles": [
@@ -33,8 +33,8 @@
         "Marigold_1": {
             "nodeType": "Marigold",
             "position": [
-                -54,
-                -57
+                200,
+                0
             ],
             "inputs": {
                 "inputImages": "{CameraInit_1.output}",
