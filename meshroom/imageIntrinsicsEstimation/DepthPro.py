@@ -81,7 +81,7 @@ class DepthPro(desc.Node):
             values=["Full Auto", "Metadata"],
             value="Full Auto",
             exclusive=True,
-            enabled=lambda node: node.automaticFocalEstimation.value and not Path(node.inputImages.value).is_dir()
+            enabled=lambda node: node.automaticFocalEstimation.value and not Path(node.inputImages.value).is_dir(),
         ),
         desc.FloatParam(
             name="focalpix",
@@ -89,7 +89,7 @@ class DepthPro(desc.Node):
             value=50.0,
             description="Focal value given in pixels.",
             range=(1.0, 10000.0, 1.0),
-            enabled=lambda node: node.focalInputMode.value == "Manual",
+            enabled=lambda node: not node.automaticFocalEstimation.value,
         ),
         desc.BoolParam(
             name="outputDepth",
