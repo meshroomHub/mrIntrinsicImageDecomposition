@@ -71,6 +71,14 @@ class DepthAnythingV3(desc.Node):
             value="Metric-Large",
             exclusive=True,
         ),
+        desc.FloatParam(
+            name="focalpix",
+            label="Focal in pixels",
+            value=300.0,
+            description="Focal value in pixels used if it cannot be extracted from metadata.",
+            range=(1.0, 10000.0, 1.0),
+            enabled=lambda node: node.sam3Model.value == "Metric-Large",
+        ),
         desc.BoolParam(
             name="outputDepth",
             label="Output Depth Map",
@@ -178,7 +186,7 @@ class DepthAnythingV3(desc.Node):
             images = []
 
             for idx, path in enumerate(chunk_image_paths):
-                img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
+                img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
 
                 img_pil = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)
                 images.append(img_pil)
@@ -191,11 +199,12 @@ class DepthAnythingV3(desc.Node):
 
                 depth = prediction.depth[idx]
 
-                # if chunk.node.sam3Model.value == "Metric-Large":
-                #     depth = focal * depth / 300
+                if chunk.node.sam3Model.value == "Metric-Large":
+                    fpix = chunk_image_paths[idx][1] if chunk_image_paths[idx][1] > 0.0 else chunk.node.focalpix.value
+                    depth = fpix * depth / 300
 
                 outputDirPath = Path(chunk.node.output.value)
-                image_stem = Path(chunk_image_paths[idx]).stem
+                image_stem = Path(chunk_image_paths[idx][0]).stem
 
                 image_stem = str(image_stem)
 
@@ -214,11 +223,8 @@ class DepthAnythingV3(desc.Node):
                     image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model, optWrite)
                 if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                     import matplotlib
-                    #if chunk.node.sam3Model.value == "Metric-Large":
                     depth = (depth - depth.min()) / (depth.max() - depth.min())
                     cmap = matplotlib.colormaps.get_cmap('Spectral')
-                    #else:
-                    #    cmap = matplotlib.colormaps.get_cmap('Spectral_r')
                     colored_depth = cmap(depth)[:, :, :3]
                     image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
@@ -229,23 +235,32 @@ class DepthAnythingV3(desc.Node):
 def get_image_paths_list(input_path, extension):
     from pyalicevision import sfmData
     from pyalicevision import sfmDataIO
+    from pyalicevision import camera
     from pathlib import Path
     import itertools
+    import numpy as np
 
     include_suffixes = [extension.lower(), extension.upper()]
     image_paths = []
 
-    inPath = Path(input_path)
-    if inPath.is_dir():
-        image_paths = sorted(itertools.chain(*(inPath.glob(f'*.{suffix}') for suffix in include_suffixes)))
-    elif inPath.suffix.lower() in [".sfm", ".abc"]:
-        if inPath.exists():
+    if Path(input_path).is_dir():
+        image_paths = sorted(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
+        image_paths = [(p, -1.0) for p in image_paths]
+    elif Path(input_path).suffix.lower() in [".sfm", ".abc"]:
+        if Path(input_path).exists():
             dataAV = sfmData.SfMData()
             if sfmDataIO.load(dataAV, input_path, sfmDataIO.ALL):
                 views = dataAV.getViews()
                 for id, v in views.items():
-                    image_paths.append(Path(v.getImage().getImagePath()))
-            image_paths.sort()
+                    intrinsicId = v.getIntrinsicId()
+                    intrinsic = dataAV.getIntrinsic(intrinsicId)
+                    scaleOffset = camera.IntrinsicScaleOffset.cast(intrinsic)
+                    focalLength = scaleOffset.getFocalLength()
+                    sensorWidth = scaleOffset.sensorWidth()
+                    focal_x_pix = focalLength * float(scaleOffset.w()) / sensorWidth
+                    image_paths.append((Path(v.getImage().getImagePath()), focal_x_pix))
+
+            image_paths.sort(key=lambda x: x[0])
     else:
         raise ValueError(f"Input path '{input_path}' is not a valid path (folder or sfmData file).")
     return image_paths
