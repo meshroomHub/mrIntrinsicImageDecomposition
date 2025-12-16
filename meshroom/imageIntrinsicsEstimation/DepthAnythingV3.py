@@ -111,7 +111,7 @@ class DepthAnythingV3(desc.Node):
         desc.File(
             name='output',
             label='Output Folder',
-            description="Output folder containing the normal maps saved as exr images.",
+            description="Output folder containing the depth maps saved as exr images.",
             value="{nodeCacheFolder}",
         ),
         desc.File(
@@ -152,7 +152,6 @@ class DepthAnythingV3(desc.Node):
 
         import torch
         from img_proc import image
-        from img_proc.depth_map import colorize_depth
         import json
         import os
         import numpy as np
@@ -200,8 +199,8 @@ class DepthAnythingV3(desc.Node):
                 depth = prediction.depth[idx]
 
                 if chunk.node.sam3Model.value == "Metric-Large":
-                    fpix = chunk_image_paths[idx][1] if chunk_image_paths[idx][1] > 0.0 else chunk.node.focalpix.value
-                    depth = fpix * depth / 300
+                    fpix = chunk_image_paths[idx][1] if chunk_image_paths[idx][1] is not None else 0.0
+                    depth = (fpix if fpix > 0.0 else chunk.node.focalpix.value) * depth / 300
 
                 outputDirPath = Path(chunk.node.output.value)
                 image_stem = Path(chunk_image_paths[idx][0]).stem
