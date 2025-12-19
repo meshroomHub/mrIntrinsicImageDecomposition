@@ -80,6 +80,13 @@ class DepthAnythingV3(desc.Node):
             enabled=lambda node: node.sam3Model.value == "Metric-Large",
         ),
         desc.BoolParam(
+            name="useCameraPoseIfAvailable",
+            label="Use Camera Pose If Available",
+            description="Feed the model with intrinsics and extrinsics extracted from sfmData.",
+            value=True,
+            enabled=lambda node: node.inputImages.value[-4:].lower() in [".sfm", ".abc"] and node.sam3Model.value != "Metric-Large",
+        ),
+        desc.BoolParam(
             name="outputDepth",
             label="Output Depth Map",
             description="If this option is enabled, a depth map is generated.",
@@ -105,6 +112,15 @@ class DepthAnythingV3(desc.Node):
             values=VERBOSE_LEVEL,
             value="info",
         ),
+        desc.BoolParam(
+            name="inputNameIsViewId",
+            label="ViewIds As Input Name",
+            description="Enabled output visu when input images are named with viewIds.",
+            value=False,
+            advanced=True,
+            invalidate=False,
+            enabled=lambda node: node.inputImages.value[-4:].lower() in [".sfm", ".abc"],
+        ),
     ]
 
     outputs = [
@@ -119,7 +135,7 @@ class DepthAnythingV3(desc.Node):
             label="Depth Map",
             description="Output depth map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
+            value=lambda attr: "{nodeCacheFolder}/depth_<VIEW_ID>.exr" if attr.node.inputNameIsViewId.value else "{nodeCacheFolder}/depth_<FILESTEM>.exr",
             group="",
             enabled=lambda node: node.outputDepth.value,
         ),
@@ -128,7 +144,7 @@ class DepthAnythingV3(desc.Node):
             label="Colored Depth Map",
             description="Output colored depth map",
             semantic="image",
-            value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
+            value=lambda attr: "{nodeCacheFolder}/depth_vis_<VIEW_ID>.png" if attr.node.inputNameIsViewId.value else "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             group="",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
@@ -183,15 +199,24 @@ class DepthAnythingV3(desc.Node):
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "1.1"
 
             images = []
+            intrinsics = []
+            extrinsics = []
 
             for idx, path in enumerate(chunk_image_paths):
                 img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
 
                 img_pil = (np.clip(img, 0.0, 1.0) * 255).astype(np.uint8)
                 images.append(img_pil)
+                if chunk_image_paths[idx][3].size and chunk.node.sam3Model.value != "Metric-Large" and chunk.node.useCameraPoseIfAvailable.value:
+                    intrinsics.append(chunk_image_paths[idx][2])
+                    extrinsics.append(chunk_image_paths[idx][3])
 
             with torch.no_grad():
-                prediction = model.inference(images,)
+                if len(intrinsics) > 0:
+                    chunk.logger.info("Compute depth maps using camera poses")
+                    prediction = model.inference(image=images, extrinsics=extrinsics, intrinsics=intrinsics)
+                else:
+                    prediction = model.inference(images,)
 
             # Write outputs
             for idx, path in enumerate(chunk_image_paths):
@@ -257,7 +282,25 @@ def get_image_paths_list(input_path, extension):
                     focalLength = scaleOffset.getFocalLength()
                     sensorWidth = scaleOffset.sensorWidth()
                     focal_x_pix = focalLength * float(scaleOffset.w()) / sensorWidth
-                    image_paths.append((Path(v.getImage().getImagePath()), focal_x_pix))
+
+                    scale = scaleOffset.getScale()
+                    pp = scaleOffset.getPrincipalPoint()
+                    intrinsics = np.array([[scale[0][0], 0, pp[0][0]], [0, scale[1][0], pp[1][0]], [0.0, 0.0, 1.0]])
+
+                    extrinsics = np.array([])
+                    if dataAV.existsPose(v):
+                        poseId = v.getPoseId()
+                        pose = dataAV.getAbsolutePose(poseId)
+                        poseTransform = pose.getTransform()
+                        rotation = poseTransform.rotation()
+                        translation = poseTransform.translation()
+                        extrinsics = np.array([
+                            np.append(rotation[0], translation[0][0]),
+                            np.append(rotation[1], translation[1][0]),
+                            np.append(rotation[2], translation[2][0]),
+                            np.array([0.0, 0.0, 0.0, 1.0])])
+
+                    image_paths.append((Path(v.getImage().getImagePath()), focal_x_pix, intrinsics, extrinsics))
 
             image_paths.sort(key=lambda x: x[0])
     else:
