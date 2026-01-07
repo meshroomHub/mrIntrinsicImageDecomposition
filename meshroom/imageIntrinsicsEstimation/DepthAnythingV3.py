@@ -172,6 +172,7 @@ class DepthAnythingV3(desc.Node):
         import os
         import numpy as np
         from pathlib import Path
+        import OpenImageIO as oiio
 
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
@@ -245,6 +246,23 @@ class DepthAnythingV3(desc.Node):
                     optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("DWAA"))
                     optWrite.exrCompressionLevel(45)
                     image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model, optWrite)
+
+                    file = oiio.ImageInput.open(depth_file_path)
+                    if file:
+                        spec = file.spec()
+                        pixels = file.read_image()
+                        file.close()
+
+                        spec.attribute("AliceVision:downscale", 1)
+                        spec.attribute("AliceVision:CArr", oiio.TypeVector, tuple(chunk_image_paths[idx][5]))
+                        spec.attribute("AliceVision:iCamArr", oiio.TypeMatrix33, tuple(chunk_image_paths[idx][6]))
+
+                        updated = oiio.ImageOutput.create(depth_file_path)
+                        if updated:
+                            updated.open(depth_file_path, spec)
+                            updated.write_image(pixels)
+                            updated.close()
+
                 if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                     import matplotlib
                     depth = (depth - depth.min()) / (depth.max() - depth.min())
@@ -269,7 +287,7 @@ def get_image_paths_list(input_path, extension):
 
     if Path(input_path).is_dir():
         image_paths = sorted(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
-        image_paths = [(p, -1.0) for p in image_paths]
+        image_paths = [(p, -1.0, None, None, -1.0, None, None) for p in image_paths]
     elif Path(input_path).suffix.lower() in [".sfm", ".abc"]:
         if Path(input_path).exists():
             dataAV = sfmData.SfMData()
@@ -282,6 +300,7 @@ def get_image_paths_list(input_path, extension):
                     focalLength = scaleOffset.getFocalLength()
                     sensorWidth = scaleOffset.sensorWidth()
                     focal_x_pix = focalLength * float(scaleOffset.w()) / sensorWidth
+                    fov_x_deg = 2 * 180 * np.arctan(sensorWidth / ( 2 *focalLength)) / np.pi
 
                     scale = scaleOffset.getScale()
                     pp = scaleOffset.getPrincipalPoint()
@@ -299,8 +318,12 @@ def get_image_paths_list(input_path, extension):
                             np.append(rotation[1], translation[1][0]),
                             np.append(rotation[2], translation[2][0]),
                             np.array([0.0, 0.0, 0.0, 1.0])])
+                        center = poseTransform.center()
+                        CArr = [center[0][0], center[1][0], center[2][0]]
+                        m = np.transpose(rotation) @ np.linalg.inv(intrinsics)
+                        iCamArr = [m[0][0],m[0][1],m[0][2],m[1][0],m[1][1],m[1][2],m[2][0],m[2][1],m[2][2]]
 
-                    image_paths.append((Path(v.getImage().getImagePath()), focal_x_pix, intrinsics, extrinsics))
+                    image_paths.append((Path(v.getImage().getImagePath()), focal_x_pix, intrinsics, extrinsics, fov_x_deg, CArr, iCamArr, rotation))
 
             image_paths.sort(key=lambda x: x[0])
     else:
