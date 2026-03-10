@@ -1,28 +1,10 @@
-__version__ = "1.0"
+__version__ = "2.0"
 
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
+from pyalicevision import parallelization as avpar
 
 from pathlib import Path
-
-class DepthProNodeSize(desc.MultiDynamicNodeSize):
-    def computeSize(self, node):
-        if node.attribute(self._params[0]).isLink:
-            return node.attribute(self._params[0]).inputLink.node.size
-
-        input_path_param = node.attribute(self._params[0])
-        extension_param = node.attribute(self._params[1])
-        input_path = input_path_param.value
-        extension = extension_param.value
-        include_suffixes = [extension.lower(), extension.upper()]
-
-        size = 1
-        if Path(input_path).is_dir():
-            import itertools
-            image_paths = list(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
-            size = len(image_paths)
-        
-        return size
 
 class DepthProBlockSize(desc.Parallelization):
     def getSizes(self, node):
@@ -42,24 +24,15 @@ class DepthPro(desc.Node):
     
     gpu = desc.Level.INTENSIVE
 
-    size = DepthProNodeSize(['inputImages', 'inputExtension'])
+    size = avpar.DynamicViewsSize("inputImages")
     parallelization = DepthProBlockSize()
 
     inputs = [
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Input images to process. Folder path or sfmData filepath",
+            description="Filepath of sfmData (.sfm or .abc) containing the filepaths of images to be processed.",
             value="",
-        ),
-        desc.ChoiceParam(
-            name="inputExtension",
-            label="Input Extension",
-            description="Extension of the input images. This will be used to determine which images are to be used if \n"
-                        "a directory is provided as the input.",
-            values=["jpg", "jpeg", "png", "exr"],
-            value="exr",
-            exclusive=True,
         ),
         desc.BoolParam(
             name="halfSizeModel",
@@ -151,10 +124,9 @@ class DepthPro(desc.Node):
     ]
 
     def preprocess(self, node):
-        extension = node.inputExtension.value
         input_path = node.inputImages.value
 
-        image_paths = get_image_paths_list(input_path, extension)
+        image_paths = get_image_paths_list(input_path)
 
         if len(image_paths) == 0:
             raise FileNotFoundError(f'No image files found in {input_path}')
@@ -287,21 +259,16 @@ class DepthPro(desc.Node):
             chunk.logManager.end()
 
 
-def get_image_paths_list(input_path, extension):
+def get_image_paths_list(input_path):
     from pyalicevision import sfmData
     from pyalicevision import sfmDataIO
     from pyalicevision import camera
     from pathlib import Path
-    import itertools
     import numpy as np
 
-    include_suffixes = [extension.lower(), extension.upper()]
     image_paths = []
 
-    if Path(input_path).is_dir():
-        image_paths = sorted(itertools.chain(*(Path(input_path).glob(f'*.{suffix}') for suffix in include_suffixes)))
-        image_paths = [(p, -1.0, -1.0) for p in image_paths]
-    elif Path(input_path).suffix.lower() in [".sfm", ".abc"]:
+    if Path(input_path).suffix.lower() in [".sfm", ".abc"]:
         if Path(input_path).exists():
             dataAV = sfmData.SfMData()
             if sfmDataIO.load(dataAV, input_path, sfmDataIO.ALL):
@@ -318,6 +285,6 @@ def get_image_paths_list(input_path, extension):
 
             image_paths.sort(key=lambda x: x[0])
     else:
-        raise ValueError(f"Input path '{input_path}' is not a valid path (folder or sfmData file).")
+        raise ValueError(f"Input path '{input_path}' is not a valid sfmData file.")
     return image_paths
 
