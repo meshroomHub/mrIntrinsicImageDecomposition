@@ -600,5 +600,5 @@ def get_image_paths_list(input_path):
                     image_paths.append((Path(v.getImage().getImagePath()), str(id)))
             image_paths.sort(key=lambda item: item[0])
     else:
-        raise ValueError(f"Input path '{input_path}' is not a valid psfmData file.")
+        raise ValueError(f"Input path '{input_path}' is not a valid sfmData file.")
     return image_paths
