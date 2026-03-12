@@ -5,7 +5,7 @@
         "nodesVersions": {
             "CameraInit": "12.0",
             "CopyFiles": "1.3",
-            "Marigold": "1.0"
+            "Marigold": "2.0"
         },
         "template": true
     },

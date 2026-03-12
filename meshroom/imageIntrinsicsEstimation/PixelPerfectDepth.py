@@ -81,7 +81,6 @@ class PixelPerfectDepth(desc.Node):
             description="Generated depth maps.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
-            group="",
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
@@ -90,7 +89,6 @@ class PixelPerfectDepth(desc.Node):
             description="Generated colored depth maps.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
-            group="",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
     ]

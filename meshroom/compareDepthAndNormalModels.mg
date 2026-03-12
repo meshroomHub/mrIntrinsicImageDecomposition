@@ -5,12 +5,12 @@
         "nodesVersions": {
             "CameraInit": "12.0",
             "CopyFiles": "1.3",
-            "DepthAnythingV2": "1.0",
-            "DepthPro": "1.0",
-            "Marigold": "1.0",
-            "MoGe": "1.0",
-            "PixelPerfectDepth": "1.0",
-            "StableNormal": "1.0"
+            "DepthAnythingV2": "2.0",
+            "DepthPro": "2.0",
+            "Marigold": "2.0",
+            "MoGe": "2.0",
+            "PixelPerfectDepth": "2.0",
+            "StableNormal": "2.0"
         },
         "template": true
     },

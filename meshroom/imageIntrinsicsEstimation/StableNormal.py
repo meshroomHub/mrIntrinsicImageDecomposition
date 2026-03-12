@@ -76,7 +76,6 @@ class StableNormal(desc.Node):
             description="Output normal maps",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normal_<FILESTEM>.exr",
-            group="",
         )
     ]
 
