@@ -5,7 +5,7 @@
         "nodesVersions": {
             "CameraInit": "12.0",
             "CopyFiles": "1.3",
-            "MoGe": "1.0"
+            "MoGe": "2.0"
         },
         "template": true
     },

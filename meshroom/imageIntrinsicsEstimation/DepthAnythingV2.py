@@ -111,7 +111,6 @@ class DepthAnythingV2(desc.Node):
             description="Output depth map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
-            group="",
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
@@ -120,7 +119,6 @@ class DepthAnythingV2(desc.Node):
             description="Output colored depth map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
-            group="",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
     ]

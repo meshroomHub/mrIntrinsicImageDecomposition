@@ -154,7 +154,6 @@ class Marigold(desc.Node):
             description="Output normal map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_<FILESTEM>.exr",
-            group="",
             enabled=lambda node: node.computeNormals.value
         ),
         desc.File(
@@ -163,7 +162,6 @@ class Marigold(desc.Node):
             description="Colored output normal map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
-            group="",
             enabled=lambda node: node.computeNormals.value and node.saveVisuImages.value
         ),
         desc.File(
@@ -172,7 +170,6 @@ class Marigold(desc.Node):
             description="Output depth map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
-            group="",
             enabled=lambda node: node.computeDepth.value
         ),
         desc.File(
@@ -181,7 +178,6 @@ class Marigold(desc.Node):
             description="Colored output depth map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
-            group="",
             enabled=lambda node: node.computeDepth.value and node.saveVisuImages.value
         ),
         desc.File(
@@ -190,7 +186,6 @@ class Marigold(desc.Node):
             description="Colored input sparse depth map",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/input_depth_vis_<FILESTEM>.png",
-            group="",
             enabled=lambda node: node.computeDepth.value and node.saveVisuImages.value and node.inputDepthMaps.isLink
         ),
         desc.File(
@@ -199,7 +194,6 @@ class Marigold(desc.Node):
             description="Output albedo extrated from appearance model",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/albedo_appearance_<FILESTEM>.exr",
-            group="",
             enabled=lambda node: node.computeAppearance.value and node.outputFormat.value == ".exr"
         ),
         desc.File(
@@ -208,7 +202,6 @@ class Marigold(desc.Node):
             description="Output albedo extrated from lighting model",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/albedo_lighting_<FILESTEM>.exr",
-            group="",
             enabled=lambda node: node.computeLighting.value and node.outputFormat.value == ".exr"
         ),
         desc.File(
@@ -217,7 +210,6 @@ class Marigold(desc.Node):
             description="Output material extrated from appearance model",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/material_appearance_<FILESTEM>.exr",
-            group="",
             enabled=lambda node: node.computeAppearance.value and node.outputFormat.value == ".exr"
         ),
         desc.File(
@@ -226,7 +218,6 @@ class Marigold(desc.Node):
             description="Output shading extrated from lighting model",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/shading_lighting_<FILESTEM>.exr",
-            group="",
             enabled=lambda node: node.computeLighting.value and node.outputFormat.value == ".exr"
         ),
         desc.File(
@@ -235,7 +226,6 @@ class Marigold(desc.Node):
             description="Output residual extrated from lighting model",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/residual_lighting_<FILESTEM>.exr",
-            group="",
             enabled=lambda node: node.computeLighting.value and node.outputFormat.value == ".exr"
         ),
     ]
