@@ -213,14 +213,11 @@ class MoGe(desc.Node):
         ),
     ]
 
-    def preprocess(self, node):
+    def get_image_paths(self, node):
         input_path = node.inputImages.value
-
         image_paths = get_image_paths_list(input_path)
-
         if len(image_paths) == 0:
             raise FileNotFoundError(f'No image files found in {input_path}')
-
         self.image_paths = image_paths
 
     def processChunk(self, chunk):
@@ -237,6 +234,7 @@ class MoGe(desc.Node):
         import os
         import numpy as np
 
+        self.get_image_paths(chunk.node)
         if chunk.range.start >= len(self.image_paths):
             chunk.logManager.start(chunk.node.verboseLevel.value)
             chunk.logger.info('Empty chunk.')

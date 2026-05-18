@@ -93,7 +93,7 @@ class PixelPerfectDepth(desc.Node):
         ),
     ]
 
-    def preprocess(self, node):
+    def get_image_paths(self, node):
         input_path = node.inputImages.value
         image_paths = get_image_paths_list(input_path)
         if len(image_paths) == 0:
@@ -118,6 +118,7 @@ class PixelPerfectDepth(desc.Node):
             if not chunk.node.inputImages.value:
                 chunk.logger.warning('No input folder given.')
 
+            self.get_image_paths(chunk.node)
             chunk_image_paths = self.image_paths[chunk.range.start:chunk.range.end]
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
