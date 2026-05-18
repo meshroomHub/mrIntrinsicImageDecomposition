@@ -1,6 +1,5 @@
 __version__ = "2.0"
 
-from re import M
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
 from pyalicevision import parallelization as avpar
@@ -10,16 +9,18 @@ class PixelPerfectDepthBlockSize(desc.Parallelization):
         import math
 
         size = node.size
-        if node.attribute('blockSize').value:
-            nbBlocks = int(math.ceil(float(size) / float(node.attribute('blockSize').value)))
-            return node.attribute('blockSize').value, size, nbBlocks
+        if node.attribute("blockSize").value:
+            nbBlocks = int(math.ceil(float(size) / float(node.attribute("blockSize").value)))
+            return node.attribute("blockSize").value, size, nbBlocks
         else:
             return size, size, 1
 
 
 class PixelPerfectDepth(desc.Node):
+    """
+    This node computes depth, from a monocular image using the PixelPerfectDepth deep model.
+    """
     category = "Image Intrinsics"
-    documentation = """This node computes depth, from a monocular image using the PixelPerfectDepth deep model."""
     
     gpu = desc.Level.INTENSIVE
 
@@ -30,7 +31,7 @@ class PixelPerfectDepth(desc.Node):
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Filepath of sfmData (.sfm or .abc) containing the filepaths of images to be processed.",
+            description="Filepath of SfMData (.sfm or .abc) containing the filepaths of images to be processed.",
             value="",
         ),
         desc.IntParam(
@@ -70,13 +71,13 @@ class PixelPerfectDepth(desc.Node):
 
     outputs = [
         desc.File(
-            name='output',
-            label='Output Folder',
+            name="output",
+            label="Output Folder",
             description="Output folder containing the normal maps saved as EXR images.",
             value="{nodeCacheFolder}",
         ),
         desc.File(
-            name="DepthMap",
+            name="depthMaps",
             label="Depth Maps",
             description="Generated depth maps.",
             semantic="image",
@@ -84,7 +85,7 @@ class PixelPerfectDepth(desc.Node):
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
-            name="DepthMapColor",
+            name="depthMapsColor",
             label="Colored Depth Maps",
             description="Generated colored depth maps.",
             semantic="image",
@@ -93,22 +94,19 @@ class PixelPerfectDepth(desc.Node):
         ),
     ]
 
-    def preprocess(self, node):
+    def get_image_paths(self, node):
         input_path = node.inputImages.value
         image_paths = get_image_paths_list(input_path)
         if len(image_paths) == 0:
-            raise FileNotFoundError(f'No image files found in {input_path}')
+            raise FileNotFoundError(f"No image files found in {input_path}.")
         self.image_paths = image_paths
 
     def processChunk(self, chunk):
-        from ppd.utils.set_seed import set_seed
         from ppd.models.ppd import PixelPerfectDepth
 
         import torch
         import torch.nn.functional as F
         from img_proc import image
-        from img_proc.depth_map import colorize_depth
-        import json
         import os
         import numpy as np
         from pathlib import Path
@@ -116,14 +114,15 @@ class PixelPerfectDepth(desc.Node):
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
             if not chunk.node.inputImages.value:
-                chunk.logger.warning('No input folder given.')
+                chunk.logger.warning("No input folder given.")
 
+            self.get_image_paths(chunk.node)
             chunk_image_paths = self.image_paths[chunk.range.start:chunk.range.end]
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             # computation
-            chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
+            chunk.logger.info(f"Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...")
 
             # Initialize models
             chunk.logger.info("Loading PixelPerfectDepth model...")
@@ -133,22 +132,22 @@ class PixelPerfectDepth(desc.Node):
             checkpoints = os.getenv('PIXELPERFECTDEPTH_MODELS_PATH') + '/ppd.pth'
 
             model = PixelPerfectDepth(semantics_pth=semantics_pth, sampling_steps=sampling_steps)
-            model.load_state_dict(torch.load(checkpoints, map_location='cpu'), strict=False)
+            model.load_state_dict(torch.load(checkpoints, map_location="cpu"), strict=False)
             model = model.to(device).eval()
 
             metadata_deep_model = {}
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "pixelPerfectDepth"
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "0.1"
 
-            for idx, path in enumerate(chunk_image_paths):
+            for idx, _ in enumerate(chunk_image_paths):
                 with torch.no_grad():
                     img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
 
-                    img_cv2 = np.take((np.clip(img, 0.0, 1.0) * 255).astype(np.uint8), [2,1,0], axis=-1)
+                    img_cv2 = np.take((np.clip(img, 0.0, 1.0) * 255).astype(np.uint8), [2, 1, 0], axis=-1)
 
                     H, W = img_cv2.shape[:2]
                     depth, _ = model.infer_image(img_cv2)
-                    depth = F.interpolate(depth, size=(H, W), mode='bilinear', align_corners=False)[0, 0]
+                    depth = F.interpolate(depth, size=(H, W), mode="bilinear", align_corners=False)[0, 0]
                     depth = depth.squeeze().cpu().numpy()
 
                     # Write outputs
@@ -163,16 +162,16 @@ class PixelPerfectDepth(desc.Node):
                     depth_file_path = str(outputDirPath / depth_file_name)
 
                     if chunk.node.outputDepth.value:
-                        depth_to_write = depth[:,:,np.newaxis]
+                        depth_to_write = depth[:, :, np.newaxis]
                         image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
                     if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                         import matplotlib
                         depth = (depth - depth.min()) / (depth.max() - depth.min())
-                        cmap = matplotlib.colormaps.get_cmap('Spectral')
+                        cmap = matplotlib.colormaps.get_cmap("Spectral")
                         colored_depth = cmap(depth)[:, :, :3]
                         image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
-            chunk.logger.info('PixelPerfectDepth2 end')
+            chunk.logger.info("PixelPerfectDepth2 end")
         finally:
             chunk.logManager.end()
 
@@ -193,5 +192,5 @@ def get_image_paths_list(input_path):
                     image_paths.append(Path(v.getImage().getImagePath()))
             image_paths.sort()
     else:
-        raise ValueError(f"Input path '{input_path}' is not a valid sfmData file.")
+        raise ValueError(f"Input path '{input_path}' is not a valid SfMData file.")
     return image_paths

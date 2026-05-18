@@ -1,6 +1,5 @@
 __version__ = "2.0"
 
-from re import M
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
 from pyalicevision import parallelization as avpar
@@ -10,16 +9,18 @@ class DepthAnythingV3BlockSize(desc.Parallelization):
         import math
 
         size = node.size
-        if node.attribute('blockSize').value:
-            nbBlocks = int(math.ceil(float(size) / float(node.attribute('blockSize').value)))
-            return node.attribute('blockSize').value, size, nbBlocks
+        if node.attribute("blockSize").value:
+            nbBlocks = int(math.ceil(float(size) / float(node.attribute("blockSize").value)))
+            return node.attribute("blockSize").value, size, nbBlocks
         else:
             return size, size, 1
 
 
 class DepthAnythingV3(desc.Node):
+    """
+    This node computes depth, from a monocular image using the DepthAnythingV3 deep model.
+    """
     category = "Image Intrinsics"
-    documentation = """This node computes depth, from a monocular image using the DepthAnythingV3 deep model."""
     
     gpu = desc.Level.INTENSIVE
 
@@ -30,7 +31,7 @@ class DepthAnythingV3(desc.Node):
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Filepath of sfmData (.sfm or .abc) containing the filepaths of images to be processed.",
+            description="Filepath of SfMData (.sfm or .abc) containing the filepaths of images to be processed.",
             value="",
         ),
         desc.ChoiceParam(
@@ -44,7 +45,7 @@ class DepthAnythingV3(desc.Node):
         ),
         desc.FloatParam(
             name="focalpix",
-            label="Focal in pixels",
+            label="Focal In Pixels",
             value=300.0,
             description="Focal value in pixels used if it cannot be extracted from metadata.",
             range=(1.0, 10000.0, 1.0),
@@ -58,8 +59,8 @@ class DepthAnythingV3(desc.Node):
         ),
         desc.BoolParam(
             name="saveVisuImages",
-            label="Save images for visualization",
-            description="Save additional png images for depth map.",
+            label="Save Images For Visualization",
+            description="Save additional PNG images for depth map.",
             value=False,
         ),
         desc.IntParam(
@@ -80,47 +81,42 @@ class DepthAnythingV3(desc.Node):
 
     outputs = [
         desc.File(
-            name='output',
-            label='Output Folder',
-            description="Output folder containing the depth maps saved as exr images.",
+            name="output",
+            label="Output Folder",
+            description="Output folder containing the depth maps saved as EXR images.",
             value="{nodeCacheFolder}",
         ),
         desc.File(
-            name="DepthMap",
+            name="depthMap",
             label="Depth Map",
-            description="Output depth map",
+            description="Output depth map.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
-            name="DepthMapColor",
+            name="depthMapColor",
             label="Colored Depth Map",
-            description="Output colored depth map",
+            description="Output colored depth map.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
     ]
 
-    def preprocess(self, node):
+    def get_image_paths(self, node):
         input_path = node.inputImages.value
-
         image_paths = get_image_paths_list(input_path)
-
         if len(image_paths) == 0:
-            raise FileNotFoundError(f'No image files found in {input_path}')
-
+            raise FileNotFoundError(f"No image files found in {input_path}.")
         self.image_paths = image_paths
 
     def processChunk(self, chunk):
-
         from depth_anything_3.api import DepthAnything3
         from pyalicevision import image as avimg
 
         import torch
         from img_proc import image
-        import json
         import os
         import numpy as np
         from pathlib import Path
@@ -128,21 +124,22 @@ class DepthAnythingV3(desc.Node):
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
             if not chunk.node.inputImages.value:
-                chunk.logger.warning('No input folder given.')
+                chunk.logger.warning("No input folder given.")
 
+            self.get_image_paths(chunk.node)
             chunk_image_paths = self.image_paths[chunk.range.start:chunk.range.end]
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             # computation
-            chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
+            chunk.logger.info(f"Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...")
 
             # Initialize models
             chunk.logger.info("Loading DepthAnything model...")
 
             model_name = "models--depth-anything--DA3" + chunk.node.sam3Model.value.upper()
 
-            pretrained_path = os.getenv('DEPTH_ANYTHING_3_MODELS_PATH') + '/' + model_name
+            pretrained_path = os.getenv("DEPTH_ANYTHING_3_MODELS_PATH") + "/" + model_name
             model = DepthAnything3.from_pretrained(pretrained_path)
             model = model.to(device=device)
                 
@@ -162,7 +159,7 @@ class DepthAnythingV3(desc.Node):
                 prediction = model.inference(images,)
 
             # Write outputs
-            for idx, path in enumerate(chunk_image_paths):
+            for idx, _ in enumerate(chunk_image_paths):
 
                 depth = prediction.depth[idx]
 
@@ -184,18 +181,18 @@ class DepthAnythingV3(desc.Node):
                 optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
 
                 if chunk.node.outputDepth.value:
-                    depth_to_write = depth[:,:,np.newaxis]
+                    depth_to_write = depth[:, :, np.newaxis]
                     optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("DWAA"))
                     optWrite.exrCompressionLevel(45)
                     image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model, optWrite)
                 if chunk.node.outputDepth.value and chunk.node.saveVisuImages.value:
                     import matplotlib
                     depth = (depth - depth.min()) / (depth.max() - depth.min())
-                    cmap = matplotlib.colormaps.get_cmap('Spectral')
+                    cmap = matplotlib.colormaps.get_cmap("Spectral")
                     colored_depth = cmap(depth)[:, :, :3]
                     image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
-            chunk.logger.info('DepthAnything3 end')
+            chunk.logger.info("DepthAnything3 end")
         finally:
             chunk.logManager.end()
 
@@ -224,5 +221,5 @@ def get_image_paths_list(input_path):
 
             image_paths.sort(key=lambda x: x[0])
     else:
-        raise ValueError(f"Input path '{input_path}' is not a valid sfmData file.")
+        raise ValueError(f"Input path '{input_path}' is not a valid SfMData file.")
     return image_paths

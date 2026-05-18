@@ -19,9 +19,11 @@ class MoGeBlockSize(desc.Parallelization):
 
 
 class MoGe(desc.Node):
+    """
+    This node computes depth, normal, fov and mesh from a monocular image using the MoGe-2 deep model.
+    """
     category = "Image Intrinsics"
-    documentation = """This node computes depth, normal, fov and mesh from a monocular image using the MoGe-2 deep model."""
-    
+
     gpu = desc.Level.INTENSIVE
 
     size = avpar.DynamicViewsSize("inputImages")
@@ -31,7 +33,7 @@ class MoGe(desc.Node):
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Filepath of sfmData (.sfm or .abc) containing the filepaths of images to be processed.",
+            description="Filepath of SfMData (.sfm or .abc) containing the filepaths of images to be processed.",
             value="",
         ),
         desc.BoolParam(
@@ -68,9 +70,9 @@ class MoGe(desc.Node):
             name="resolutionLevel",
             label="Resolution Level",
             value=9,
-            description="An integer [0-9] for the resolution level for inference."
-                        "Higher value means more tokens and the finer details will be captured, but inference can be slower."
-                        "Defaults to 9. Note that it is irrelevant to the output size, which is always the same as the input size."
+            description="An integer [0-9] for the resolution level for inference.\n"
+                        "Higher value means more tokens and the finer details will be captured, but inference can be slower.\n"
+                        "Defaults to 9. Note that it is irrelevant to the output size, which is always the same as the input size.\n"
                         "`resolution_level` actually controls `num_tokens`. See `num_tokens` for more details.",
             range=(0, 9, 1),
             advanced=True,
@@ -109,8 +111,8 @@ class MoGe(desc.Node):
         ),
         desc.BoolParam(
             name="saveVisuImages",
-            label="Save images for visualization",
-            description="Save additional png images for depth and normal maps.",
+            label="Save Images For Visualization",
+            description="Save additional PNG images for depth and normal maps.",
             value=False,
         ),
         desc.BoolParam(
@@ -122,7 +124,7 @@ class MoGe(desc.Node):
         desc.ChoiceParam(
             name="meshFormat",
             label="Mesh Format",
-            description="Format to save mesh. In ply, the color will be saved as vertex colors, in glb, as texture.",
+            description="Format to save mesh in. In PLY, the color will be saved as vertex colors; in GLB, as texture.",
             values=["ply", "glb", "both"],
             value="glb",
             exclusive=True,
@@ -146,81 +148,78 @@ class MoGe(desc.Node):
 
     outputs = [
         desc.File(
-            name='output',
-            label='Output Folder',
-            description="Output folder containing the normal maps saved as exr images.",
+            name="output",
+            label="Output Folder",
+            description="Output folder containing the normal maps saved as EXR images.",
             value="{nodeCacheFolder}",
         ),
         desc.File(
-            name="NormalMap",
+            name="normalMap",
             label="Normal Map",
-            description="Output normal map",
+            description="Output normal map.",
             semantic="image",
             value="{nodeCacheFolder}/normals_<FILESTEM>.exr",
             enabled=lambda node: node.outputNormals.value,
         ),
         desc.File(
-            name="NormalMapColor",
+            name="normalMapColor",
             label="Colored Normal Map",
-            description="Output colored normal map",
+            description="Output colored normal map.",
             semantic="image",
             value="{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputNormals.value and node.saveVisuImages.value,
         ),
         desc.File(
-            name="DepthMap",
+            name="depthMap",
             label="Depth Map",
-            description="Output depth map",
+            description="Output depth map.",
             semantic="image",
             value="{nodeCacheFolder}/depth_<FILESTEM>.exr",
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
-            name="DepthMapColor",
+            name="depthMapColor",
             label="Colored Depth Map",
-            description="Output colored depth map",
+            description="Output colored depth map.",
             semantic="image",
             value="{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
         desc.File(
-            name="Mask",
+            name="mask",
             label="Mask",
-            description="Edge mask",
+            description="Edge mask.",
             semantic="image",
             value="{nodeCacheFolder}/mask_<FILESTEM>.exr",
             enabled=lambda node: node.outputMask.value
         ),
         desc.File(
-            name="Fov",
+            name="fov",
             label="Field Of View",
-            description="Output fields of view Fov_x, Fov_y in a json file",
+            description="Output fields of view Fov_x, Fov_y in a JSON file.",
             value="{nodeCacheFolder}/fov_<FILESTEM>.json",
         ),
         desc.File(
-            name="MeshPly",
+            name="meshPly",
             label="Estimated Mesh .ply",
-            description="Output mesh in ply format",
+            description="Output mesh in PLY format.",
             value="{nodeCacheFolder}/mesh_<FILESTEM>.ply",
             enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "ply"],
         ),
         desc.File(
-            name="MeshGlb",
+            name="meshGlb",
             label="Estimated Mesh .glb",
-            description="Output mesh in glb format",
+            description="Output mesh in GLB format.",
             value="{nodeCacheFolder}/mesh_<FILESTEM>.glb",
             enabled=lambda node: node.saveMesh.value and node.meshFormat.value in ["both", "glb"],
         ),
     ]
 
-    def preprocess(self, node):
+    def get_image_paths(self, node):
         input_path = node.inputImages.value
-
         image_paths = get_image_paths_list(input_path)
-
         if len(image_paths) == 0:
-            raise FileNotFoundError(f'No image files found in {input_path}')
-
+            raise FileNotFoundError(f"No image files found in {input_path}.")
         self.image_paths = image_paths
 
     def processChunk(self, chunk):
@@ -237,29 +236,30 @@ class MoGe(desc.Node):
         import os
         import numpy as np
 
+        self.get_image_paths(chunk.node)
         if chunk.range.start >= len(self.image_paths):
             chunk.logManager.start(chunk.node.verboseLevel.value)
-            chunk.logger.info('Empty chunk.')
+            chunk.logger.info("Empty chunk.")
             chunk.logManager.end()
             return
 
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
             if not chunk.node.inputImages.value:
-                chunk.logger.warning('No input folder given.')
+                chunk.logger.warning("No input folder given.")
 
             chunk_image_paths = self.image_paths[chunk.range.start:chunk.range.end]
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             # computation
-            chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
+            chunk.logger.info(f"Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...")
 
             # Initialize models
             chunk.logger.info("Loading MoGe model...")
             DEFAULT_PRETRAINED_MODEL_FOR_EACH_VERSION = {
-                "v1": os.getenv('MOGE2_MODELS_PATH') + "/moge-vitl/model.pt",
-                "v2": os.getenv('MOGE2_MODELS_PATH') + "/moge-2-vitl-normal/model.pt",
+                "v1": os.getenv("MOGE2_MODELS_PATH") + "/moge-vitl/model.pt",
+                "v2": os.getenv("MOGE2_MODELS_PATH") + "/moge-2-vitl-normal/model.pt",
             }
             model_version = "v2"
             pretrained_model_name_or_path = DEFAULT_PRETRAINED_MODEL_FOR_EACH_VERSION[model_version]
@@ -291,9 +291,14 @@ class MoGe(desc.Node):
                     resolution_level = chunk.node.resolutionLevel.value
                     num_tokens = None
 
-                    output = model.infer(image_tensor, fov_x=input_fov, resolution_level=resolution_level, num_tokens=num_tokens, use_fp16=chunk.node.halfSizeModel.value)
-                    points, depth, mask, intrinsics = output['points'].cpu().numpy(), output['depth'].cpu().numpy(), output['mask'].cpu().numpy(), output['intrinsics'].cpu().numpy()
-                    normals = output['normal'].cpu().numpy() if 'normal' in output else None
+                    output = model.infer(image_tensor, fov_x=input_fov,
+                                         resolution_level=resolution_level, num_tokens=num_tokens,
+                                         use_fp16=chunk.node.halfSizeModel.value)
+                    points = output["points"].cpu().numpy()
+                    depth = output["depth"].cpu().numpy()
+                    mask = output["mask"].cpu().numpy()
+                    intrinsics = output["intrinsics"].cpu().numpy()
+                    normals = output["normal"].cpu().numpy() if "normal" in output else None
 
                     fov_x, fov_y = utils3d.numpy.intrinsics_to_fov(intrinsics)
 
@@ -321,12 +326,12 @@ class MoGe(desc.Node):
                     optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
 
                     if chunk.node.outputDepth.value:
-                        depth_to_write = depth[:,:,np.newaxis]
+                        depth_to_write = depth[:, :, np.newaxis]
                         if chunk.node.automaticFoVEstimation.value and \
                            (chunk.node.foVEstimationMode.value == "Full Auto" or Path(chunk.node.inputImages.value).is_dir()):
-                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_x"] = str(180*fov_x/np.pi)
-                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_y"] = str(180*fov_y/np.pi)
-                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov"] = str(180*max(fov_x, fov_y)/np.pi)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_x"] = str(180 * fov_x / np.pi)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov_y"] = str(180 * fov_y / np.pi)
+                            metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:MoGe:fov"] = str(180 * max(fov_x, fov_y) / np.pi)
                         else:
                             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:Input:fov"] = str(input_fov)
                         optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("DWAA"))
@@ -356,8 +361,8 @@ class MoGe(desc.Node):
                     fov_file_path = str(outputDirPath / fov_file_name)
                     with open(fov_file_path, 'w') as f:
                         json.dump({
-                            'fov_x': round(float(np.rad2deg(fov_x)), 2),
-                            'fov_y': round(float(np.rad2deg(fov_y)), 2),
+                            "fov_x": round(float(np.rad2deg(fov_x)), 2),
+                            "fov_y": round(float(np.rad2deg(fov_y)), 2),
                         }, f)
 
                     threshold_meshing = chunk.node.threshold.value
@@ -399,7 +404,7 @@ class MoGe(desc.Node):
                         if chunk.node.meshFormat.value in ["both", "ply"]:
                             save_ply(ply_file_path, vertices, np.zeros((0, 3), dtype=np.int32), vertex_colors, vertex_normals)
 
-            chunk.logger.info('MoGe2 end')
+            chunk.logger.info("MoGe2 end")
         finally:
             chunk.logManager.end()
 
@@ -417,16 +422,16 @@ def get_image_paths_list(input_path):
             dataAV = sfmData.SfMData()
             if sfmDataIO.load(dataAV, input_path, sfmDataIO.ALL):
                 views = dataAV.getViews()
-                for id, v in views.items():
+                for _, v in views.items():
                     intrinsicId = v.getIntrinsicId()
                     intrinsic = dataAV.getIntrinsic(intrinsicId)
                     scaleOffset = camera.IntrinsicScaleOffset.cast(intrinsic)
                     focalLength = scaleOffset.getFocalLength()
                     sensorWidth = scaleOffset.sensorWidth()
-                    fov_x_deg = 2 * 180 * np.arctan(sensorWidth / ( 2 *focalLength)) / np.pi
+                    fov_x_deg = 2 * 180 * np.arctan(sensorWidth / (2 * focalLength)) / np.pi
                     image_paths.append((Path(v.getImage().getImagePath()), fov_x_deg))
 
             image_paths.sort(key=lambda x: x[0])
     else:
-        raise ValueError(f"Input path '{input_path}' is not a valid sfmData file.")
+        raise ValueError(f"Input path '{input_path}' is not a valid SfMData file.")
     return image_paths

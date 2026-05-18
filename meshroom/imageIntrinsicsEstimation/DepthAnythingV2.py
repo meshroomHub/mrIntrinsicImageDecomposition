@@ -1,6 +1,5 @@
 __version__ = "2.0"
 
-from re import M
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
 from pyalicevision import parallelization as avpar
@@ -10,16 +9,18 @@ class DepthAnythingBlockSize(desc.Parallelization):
         import math
 
         size = node.size
-        if node.attribute('blockSize').value:
-            nbBlocks = int(math.ceil(float(size) / float(node.attribute('blockSize').value)))
-            return node.attribute('blockSize').value, size, nbBlocks
+        if node.attribute("blockSize").value:
+            nbBlocks = int(math.ceil(float(size) / float(node.attribute("blockSize").value)))
+            return node.attribute("blockSize").value, size, nbBlocks
         else:
             return size, size, 1
 
 
 class DepthAnythingV2(desc.Node):
+    """
+    This node computes depth, from a monocular image using the DepthAnythingV2 deep model.
+    """
     category = "Image Intrinsics"
-    documentation = """This node computes depth, from a monocular image using the DepthAnythingV2 deep model."""
     
     gpu = desc.Level.INTENSIVE
 
@@ -30,7 +31,7 @@ class DepthAnythingV2(desc.Node):
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Filepath of sfmData (.sfm or .abc) containing the filepaths of images to be processed.",
+            description="Filepath of SfMData (.sfm or .abc) containing the filepaths of images to be processed.",
             value="",
         ),
         desc.BoolParam(
@@ -59,7 +60,7 @@ class DepthAnythingV2(desc.Node):
             name="maxDepth",
             label="Max Depth",
             value=20.0,
-            description="Maximum of the depth",
+            description="Maximum of the depth.",
             range=(1.0, 500.0, 1.0),
             enabled=lambda node: node.metricModel.value,
         ),
@@ -67,7 +68,7 @@ class DepthAnythingV2(desc.Node):
             name="inputModelSize",
             label="Input Model Size",
             value=518,
-            description="Input size of the deep model. The higher, the more VRAM used. Default 518",
+            description="Input size of the deep model. The higher, the more VRAM used. Default 518.",
             range=(128, 2048, 1),
         ),
         desc.BoolParam(
@@ -78,8 +79,8 @@ class DepthAnythingV2(desc.Node):
         ),
         desc.BoolParam(
             name="saveVisuImages",
-            label="Save images for visualization",
-            description="Save additional png images for depth map.",
+            label="Save Images For Visualization",
+            description="Save additional PNG images for depth map.",
             value=False,
         ),
         desc.IntParam(
@@ -100,34 +101,34 @@ class DepthAnythingV2(desc.Node):
 
     outputs = [
         desc.File(
-            name='output',
-            label='Output Folder',
-            description="Output folder containing the normal maps saved as exr images.",
+            name="output",
+            label="Output Folder",
+            description="Output folder containing the normal maps saved as EXR images.",
             value="{nodeCacheFolder}",
         ),
         desc.File(
-            name="DepthMap",
+            name="depthMap",
             label="Depth Map",
-            description="Output depth map",
+            description="Output depth map.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
-            name="DepthMapColor",
+            name="depthMapColor",
             label="Colored Depth Map",
-            description="Output colored depth map",
+            description="Output colored depth map.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
     ]
 
-    def preprocess(self, node):
+    def get_image_paths(self, node):
         input_path = node.inputImages.value
         image_paths = get_image_paths_list(input_path)
         if len(image_paths) == 0:
-            raise FileNotFoundError(f'No image files found in {input_path}')
+            raise FileNotFoundError(f"No image files found in {input_path}.")
         self.image_paths = image_paths
 
     def processChunk(self, chunk):
@@ -140,8 +141,6 @@ class DepthAnythingV2(desc.Node):
 
         import torch
         from img_proc import image
-        from img_proc.depth_map import colorize_depth
-        import json
         import os
         import numpy as np
         from pathlib import Path
@@ -149,42 +148,43 @@ class DepthAnythingV2(desc.Node):
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
             if not chunk.node.inputImages.value:
-                chunk.logger.warning('No input folder given.')
+                chunk.logger.warning("No input folder given.")
 
+            self.get_image_paths(chunk.node)
             chunk_image_paths = self.image_paths[chunk.range.start:chunk.range.end]
 
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             # computation
-            chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
+            chunk.logger.info(f"Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...")
 
             # Initialize models
             chunk.logger.info("Loading DepthAnything model...")
 
             model_configs = {
-                'vits': {'encoder': 'vits', 'features': 64, 'out_channels': [48, 96, 192, 384]},
-                'vitb': {'encoder': 'vitb', 'features': 128, 'out_channels': [96, 192, 384, 768]},
-                'vitl': {'encoder': 'vitl', 'features': 256, 'out_channels': [256, 512, 1024, 1024]},
-                'vitg': {'encoder': 'vitg', 'features': 384, 'out_channels': [1536, 1536, 1536, 1536]}
+                "vits": {"encoder": "vits", "features": 64, "out_channels": [48, 96, 192, 384]},
+                "vitb": {'encoder': "vitb", "features": 128, "out_channels": [96, 192, 384, 768]},
+                "vitl": {'encoder': "vitl", "features": 256, "out_channels": [256, 512, 1024, 1024]},
+                "vitg": {'encoder': "vitg", "features": 384, "out_channels": [1536, 1536, 1536, 1536]}
             }
             metric_model_types = {
-                'indoor': "hypersim",
-                'outdoor': "vkitti"
+                "indoor": "hypersim",
+                "outdoor": "vkitti"
             }
 
-            encoder = 'vitl'
+            encoder = "vitl"
 
-            model_name = 'depth_anything_v2'
+            model_name = "depth_anything_v2"
             if chunk.node.metricModel.value:
-                model_name += f'_metric_{metric_model_types[chunk.node.metricModelType.value]}'
-            model_name += f'_{encoder}'
-            pretrained_path = os.getenv('DEPTHANYTHINGV2_MODELS_PATH') + '/' + model_name + '.pth'
+                model_name += f"_metric_{metric_model_types[chunk.node.metricModelType.value]}"
+            model_name += f"_{encoder}"
+            pretrained_path = os.getenv("DEPTHANYTHINGV2_MODELS_PATH") + "/" + model_name + ".pth"
 
             if chunk.node.metricModel.value:
-                depth_anything = DepthAnythingV2(**{**model_configs[encoder], 'max_depth': chunk.node.maxDepth.value})
+                depth_anything = DepthAnythingV2(**{**model_configs[encoder], "max_depth": chunk.node.maxDepth.value})
             else:
                 depth_anything = DepthAnythingV2(**model_configs[encoder])
-            depth_anything.load_state_dict(torch.load(pretrained_path, map_location='cpu'))
+            depth_anything.load_state_dict(torch.load(pretrained_path, map_location="cpu"))
             depth_anything = depth_anything.to(device).eval()
             
             if chunk.node.halfSizeModel.value:
@@ -198,7 +198,7 @@ class DepthAnythingV2(desc.Node):
                 with torch.no_grad():
                     img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), applyPAR = True)
 
-                    img_cv2 = np.take((np.clip(img, 0.0, 1.0) * 255).astype(np.uint8), [2,1,0], axis=-1)
+                    img_cv2 = np.take((np.clip(img, 0.0, 1.0) * 255).astype(np.uint8), [2, 1, 0], axis=-1)
 
                     input_size = chunk.node.inputModelSize.value
                     
@@ -221,7 +221,7 @@ class DepthAnythingV2(desc.Node):
                     optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
 
                     if chunk.node.outputDepth.value:
-                        depth_to_write = depth[:,:,np.newaxis]
+                        depth_to_write = depth[:, :, np.newaxis]
                         optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("DWAA"))
                         optWrite.exrCompressionLevel(45)
                         image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model, optWrite)
@@ -229,13 +229,13 @@ class DepthAnythingV2(desc.Node):
                         import matplotlib
                         if chunk.node.metricModel.value:
                             depth = (depth - depth.min()) / (depth.max() - depth.min())
-                            cmap = matplotlib.colormaps.get_cmap('Spectral')
+                            cmap = matplotlib.colormaps.get_cmap("Spectral")
                         else:
-                            cmap = matplotlib.colormaps.get_cmap('Spectral_r')
+                            cmap = matplotlib.colormaps.get_cmap("Spectral_r")
                         colored_depth = cmap(depth)[:, :, :3]
                         image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
-            chunk.logger.info('DepthAnything2 end')
+            chunk.logger.info("DepthAnything2 end")
         finally:
             chunk.logManager.end()
 
@@ -256,5 +256,5 @@ def get_image_paths_list(input_path):
                     image_paths.append(Path(v.getImage().getImagePath()))
             image_paths.sort()
     else:
-        raise ValueError(f"Input path '{input_path}' is not a valid sfmData file.")
+        raise ValueError(f"Input path '{input_path}' is not a valid SfMData file.")
     return image_paths
