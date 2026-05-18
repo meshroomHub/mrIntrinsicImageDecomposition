@@ -1,6 +1,5 @@
 __version__ = "2.0"
 
-from re import M
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
 from pyalicevision import parallelization as avpar
@@ -10,16 +9,18 @@ class StableNormalBlockSize(desc.Parallelization):
         import math
 
         size = node.size
-        if node.attribute('blockSize').value:
-            nbBlocks = int(math.ceil(float(size) / float(node.attribute('blockSize').value)))
-            return node.attribute('blockSize').value, size, nbBlocks
+        if node.attribute("blockSize").value:
+            nbBlocks = int(math.ceil(float(size) / float(node.attribute("blockSize").value)))
+            return node.attribute("blockSize").value, size, nbBlocks
         else:
             return size, size, 1
 
 
 class StableNormal(desc.Node):
+    """
+    This node computes a normal map from a monocular image using the stableNormal deep model.
+    """
     category = "Image Intrinsics"
-    documentation = """This node computes a normal map from a monocular image using the stableNormal deep model."""
     
     gpu = desc.Level.INTENSIVE
 
@@ -30,7 +31,7 @@ class StableNormal(desc.Node):
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Filepath of sfmData (.sfm or .abc) containing the filepaths of images to be processed.",
+            description="Filepath of SfMData (.sfm or .abc) containing the filepaths of images to be processed.",
             value="",
         ),
         desc.IntParam(
@@ -65,15 +66,15 @@ class StableNormal(desc.Node):
 
     outputs = [
         desc.File(
-            name='output',
-            label='Output Folder',
-            description="Output folder containing the normal maps saved as exr images.",
+            name="output",
+            label="Output Folder",
+            description="Output folder containing the normal maps saved as EXR images.",
             value="{nodeCacheFolder}",
         ),
         desc.File(
-            name="NormalMap",
-            label="Normal Map",
-            description="Output normal maps",
+            name="normalMaps",
+            label="Normal Maps",
+            description="Output normal maps.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normal_<FILESTEM>.exr",
         )
@@ -83,7 +84,7 @@ class StableNormal(desc.Node):
         input_path = node.inputImages.value
         image_paths = get_image_paths_list(input_path)
         if len(image_paths) == 0:
-            raise FileNotFoundError(f'No image files found in {input_path}')
+            raise FileNotFoundError(f"No image files found in {input_path}.")
         self.image_paths = image_paths
 
     def processChunk(self, chunk):
@@ -100,7 +101,7 @@ class StableNormal(desc.Node):
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
             if not chunk.node.inputImages.value:
-                chunk.logger.warning('No input folder given.')
+                chunk.logger.warning("No input folder given.")
 
             self.get_image_paths(chunk.node)
             chunk_image_paths = self.image_paths[chunk.range.start:chunk.range.end]
@@ -109,15 +110,15 @@ class StableNormal(desc.Node):
 
             # Initialize models
             print("Loading normal estimation model...")
-            yosoNormalV03_path = os.getenv('YOSONORMALV03_PATH')
+            yosoNormalV03_path = os.getenv("YOSONORMALV03_PATH")
             x_start_pipeline = YOSONormalsPipeline.from_pretrained(yosoNormalV03_path,
                                                                    local_file_only=True, variant="fp16",
                                                                    torch_dtype=torch.float16, t_start=0).to(DEVICE)
             
-            stableNormalV01_modelpath = os.getenv('STABLENORMALV01_MODELPATH')
+            stableNormalV01_modelpath = os.getenv("STABLENORMALV01_MODELPATH")
             pipe = StableNormalPipeline.from_pretrained(stableNormalV01_modelpath, local_file_only=True,
                                                         variant="fp16", torch_dtype=torch.float16,
-                                                        scheduler=HEURI_DDIMScheduler(prediction_type='sample', 
+                                                        scheduler=HEURI_DDIMScheduler(prediction_type="sample", 
                                                                                     beta_start=0.00085, beta_end=0.0120, 
                                                                                     beta_schedule = "scaled_linear"))
 
@@ -129,17 +130,16 @@ class StableNormal(desc.Node):
                 import xformers
                 pipe.enable_xformers_memory_efficient_attention()
             except ImportError:
-                print("XFormers not available, running without memory optimizations")
+                print("XFormers not available, running without memory optimizations.")
 
             # computation
-            chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
+            chunk.logger.info(f"Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...")
 
             metadata_deep_model = {}
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "stableNormal"
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "0.1"
 
-            for idx, path in enumerate(chunk_image_paths):
-                #if idx > 0:
+            for idx, _ in enumerate(chunk_image_paths):
                 with torch.no_grad():
                     image1, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx]), True)
 
@@ -165,7 +165,7 @@ class StableNormal(desc.Node):
                     )
 
                     prediction = pipe_out.prediction[0].copy()
-                    normalMap = (prediction.clip(-1,1) + 1) / 2
+                    normalMap = (prediction.clip(-1, 1) + 1) / 2
 
                     outputDirPath = Path(chunk.node.output.value)
                     image_stem = Path(chunk_image_paths[idx]).stem
@@ -173,7 +173,7 @@ class StableNormal(desc.Node):
 
                     image.writeImage(str(outputDirPath / of_file_name), normalMap, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
             
-            chunk.logger.info('Publish end')
+            chunk.logger.info("StableNormal end")
         finally:
             chunk.logManager.end()
 
@@ -193,5 +193,5 @@ def get_image_paths_list(input_path):
                     image_paths.append(Path(v.getImage().getImagePath()))
             image_paths.sort()
     else:
-        raise ValueError(f"Input path '{input_path}' is not a valid sfmData file.")
+        raise ValueError(f"Input path '{input_path}' is not a valid SfMData file.")
     return image_paths

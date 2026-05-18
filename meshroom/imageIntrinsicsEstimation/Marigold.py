@@ -1,6 +1,5 @@
 __version__ = "2.0"
 
-from re import M
 from meshroom.core import desc
 from meshroom.core.utils import VERBOSE_LEVEL
 from pyalicevision import parallelization as avpar
@@ -10,17 +9,19 @@ class MarigoldBlockSize(desc.Parallelization):
         import math
 
         size = node.size
-        if node.attribute('blockSize').value:
-            nbBlocks = int(math.ceil(float(size) / float(node.attribute('blockSize').value)))
-            return node.attribute('blockSize').value, size, nbBlocks
+        if node.attribute("blockSize").value:
+            nbBlocks = int(math.ceil(float(size) / float(node.attribute("blockSize").value)))
+            return node.attribute("blockSize").value, size, nbBlocks
         else:
             return size, size, 1
 
 
 class Marigold(desc.Node):
+    """
+    This node computes depth, normal, albedo, shading and material from a monocular image using 4 Marigold deep models.
+    In case a partial depth map is provided as input, a completed depth map is estimated using Marigold-dc algorithm.
+    """
     category = "Image Intrinsics"
-    documentation = """This node computes depth, normal, albedo, shading and material from a monocular image using 4 Marigold deep models.
-                       In case a partial depth map is provided as input, a completed depth map is estimated using Marigold-dc algorithm."""
     
     gpu = desc.Level.INTENSIVE
 
@@ -31,7 +32,7 @@ class Marigold(desc.Node):
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Filepath of sfmData (.sfm or .abc) containing the filepaths of images to be processed.",
+            description="Filepath of SfMData (.sfm or .abc) containing the filepaths of images to be processed.",
             value="",
         ),
         desc.File(
@@ -121,7 +122,7 @@ class Marigold(desc.Node):
         ),
         desc.BoolParam(
             name="saveVisuImages",
-            label="Save images for visualization",
+            label="Save Images For Visualization",
             description="Save additional png images for depth and normal maps.",
             value=False,
         ),
@@ -143,87 +144,87 @@ class Marigold(desc.Node):
 
     outputs = [
         desc.File(
-            name='output',
-            label='Output Folder',
+            name="output",
+            label="Output Folder",
             description="Output folder containing the computed images.",
             value="{nodeCacheFolder}",
         ),
         desc.File(
-            name="NormalMap",
+            name="normalMap",
             label="Normal Map",
-            description="Output normal map",
+            description="Output normal map.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_<FILESTEM>.exr",
             enabled=lambda node: node.computeNormals.value
         ),
         desc.File(
-            name="NormalMapColor",
+            name="normalMapColor",
             label="Colored Normal Map",
-            description="Colored output normal map",
+            description="Colored output normal map.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/normals_vis_<FILESTEM>.png",
             enabled=lambda node: node.computeNormals.value and node.saveVisuImages.value
         ),
         desc.File(
-            name="DepthMap",
+            name="depthMap",
             label="Depth Map",
-            description="Output depth map",
+            description="Output depth map.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_<FILESTEM>.exr",
             enabled=lambda node: node.computeDepth.value
         ),
         desc.File(
-            name="DepthMapColor",
+            name="depthMapColor",
             label="Colored Depth Map",
-            description="Colored output depth map",
+            description="Colored output depth map.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             enabled=lambda node: node.computeDepth.value and node.saveVisuImages.value
         ),
         desc.File(
-            name="InputSparseDepthMap",
+            name="inputSparseDepthMap",
             label="Input Sparse Depth Map",
-            description="Colored input sparse depth map",
+            description="Colored input sparse depth map.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/input_depth_vis_<FILESTEM>.png",
             enabled=lambda node: node.computeDepth.value and node.saveVisuImages.value and node.inputDepthMaps.isLink
         ),
         desc.File(
-            name="AlbedoFromAppearance",
+            name="albedoFromAppearance",
             label="Albedo From Appearance",
-            description="Output albedo extrated from appearance model",
+            description="Output albedo extracted from appearance model.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/albedo_appearance_<FILESTEM>.exr",
             enabled=lambda node: node.computeAppearance.value and node.outputFormat.value == ".exr"
         ),
         desc.File(
-            name="AlbedoFromLighting",
+            name="albedoFromLighting",
             label="Albedo From Lighting",
-            description="Output albedo extrated from lighting model",
+            description="Output albedo extracted from lighting model.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/albedo_lighting_<FILESTEM>.exr",
             enabled=lambda node: node.computeLighting.value and node.outputFormat.value == ".exr"
         ),
         desc.File(
-            name="MaterialFromAppearance",
+            name="materialFromAppearance",
             label="Material From Appearance",
-            description="Output material extrated from appearance model",
+            description="Output material extracted from appearance model.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/material_appearance_<FILESTEM>.exr",
             enabled=lambda node: node.computeAppearance.value and node.outputFormat.value == ".exr"
         ),
         desc.File(
-            name="ShadingFromLighting",
+            name="shadingFromLighting",
             label="Shading From Lighting",
-            description="Output shading extrated from lighting model",
+            description="Output shading extracted from lighting model.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/shading_lighting_<FILESTEM>.exr",
             enabled=lambda node: node.computeLighting.value and node.outputFormat.value == ".exr"
         ),
         desc.File(
-            name="ResidualFromLighting",
+            name="residualFromLighting",
             label="Residual From Lighting",
-            description="Output residual extrated from lighting model",
+            description="Output residual extracted from lighting model.",
             semantic="image",
             value=lambda attr: "{nodeCacheFolder}/residual_lighting_<FILESTEM>.exr",
             enabled=lambda node: node.computeLighting.value and node.outputFormat.value == ".exr"
@@ -234,12 +235,11 @@ class Marigold(desc.Node):
         input_path = node.inputImages.value
         image_paths = get_image_paths_list(input_path)
         if len(image_paths) == 0:
-            raise FileNotFoundError(f'No image files found in {input_path}')
+            raise FileNotFoundError(f"No image files found in {input_path}.")
         self.image_paths = image_paths
 
     def processChunk(self, chunk):
         import torch
-        import os
         from img_proc import image
         from marigold_utils import loadPipe
         import numpy as np
@@ -250,13 +250,13 @@ class Marigold(desc.Node):
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
             if not chunk.node.inputImages.value:
-                chunk.logger.warning('No input folder given.')
+                chunk.logger.warning("No input folder given.")
 
             self.get_image_paths(chunk.node)
             chunk_image_paths = self.image_paths[chunk.range.start:chunk.range.end]
 
             # computation
-            chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
+            chunk.logger.info(f"Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...")
 
             output_dir_path = Path(chunk.node.output.value)
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -267,33 +267,33 @@ class Marigold(desc.Node):
             match_input_res = not chunk.node.outputProcessingResolution.value
             resample_method = chunk.node.resamplingMethod.value
 
-            chunk.logger.info('Common processing parameters:')
-            chunk.logger.info(f'    Match Input Resolution = {match_input_res}')
-            chunk.logger.info(f'    Resampling Method = {resample_method}')
+            chunk.logger.info("Common processing parameters:")
+            chunk.logger.info(f"    Match Input Resolution = {match_input_res}")
+            chunk.logger.info(f"    Resampling Method = {resample_method}")
 
             if chunk.node.computeDepth.value:
 
                 if not chunk.node.inputDepthMaps.isLink:
                     from marigold import MarigoldDepthPipeline, MarigoldDepthOutput
                     pipe: MarigoldDepthPipeline = loadPipe.loadPipe("depth")
-                    denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 1;
-                    ensemble_size = chunk.node.ensembleSize.value if chunk.node.ensembleSize.value > 0 else 10;
+                    denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 1
+                    ensemble_size = chunk.node.ensembleSize.value if chunk.node.ensembleSize.value > 0 else 10
                 else:
                     from marigold_utils.marigold_dc import MarigoldDepthCompletionPipeline, search_partial_depth
-                    chunk.logger.info('Depth completion mode enabled')
+                    chunk.logger.info("Depth completion mode enabled")
                     pipe: MarigoldDepthCompletionPipeline = loadPipe.loadPipe("depthCompletion")
                     # if not torch.cuda.is_available():
                     #     import diffusers
                     #     chunk.logger.info("CUDA not found: Using a lightweight VAE for depth completion pipeline")
                     #     del pipeCompletion.vae
                     #     pipeCompletion.vae = diffusers.AutoencoderTiny.from_pretrained("madebyollin/taesd").to('cpu')
-                    denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 50;
+                    denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 50
                     ensemble_size = 1
 
-                chunk.logger.info('Depth processing parameters:')
-                chunk.logger.info(f'    Processing Resolution = {processing_res or pipe.default_processing_resolution}')
-                chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
-                chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
+                chunk.logger.info("Depth processing parameters:")
+                chunk.logger.info(f"    Processing Resolution = {processing_res or pipe.default_processing_resolution}")
+                chunk.logger.info(f"    Denoising Step(s) = {denoise_steps}")
+                chunk.logger.info(f"    Ensemble Size = {ensemble_size}")
 
                 metadata_deep_model = {}
                 metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Depth"
@@ -301,7 +301,7 @@ class Marigold(desc.Node):
 
                 for idx, path in enumerate(chunk_image_paths):
                     input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
-                    input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
+                    input_image = Image.fromarray((255.0 * input_image).astype(np.uint8))
 
                     input_depth = None
                     if chunk.node.inputDepthMaps.isLink:
@@ -323,9 +323,9 @@ class Marigold(desc.Node):
                         mask_pos = input_depth[0] > 0.0
                         val_min = input_depth[0][mask_pos].min()
                         input_depth_colored = pipe.image_processor.visualize_depth(input_depth[0], val_min=val_min, val_max=val_max)[0]
-                        black_img = Image.new('RGB', input_depth_colored.size, (0,0,0))
+                        black_img = Image.new("RGB", input_depth_colored.size, (0, 0, 0))
                         mask0_img = Image.fromarray(input_depth[0] == 0.0)
-                        input_depth_colored.paste(black_img, (0,0), mask0_img)
+                        input_depth_colored.paste(black_img, (0, 0), mask0_img)
 
                     elif not chunk.node.inputDepthMaps.isLink:
                         with torch.no_grad():
@@ -365,7 +365,7 @@ class Marigold(desc.Node):
 
                         depth_file_path = str(output_dir_path / depth_file_name)
 
-                        if chunk.node.outputFormat.value == '.npy' or (input_depth is not None and str(Path(input_depth[1]).suffix) == '.npy'):
+                        if chunk.node.outputFormat.value == ".npy" or (input_depth is not None and str(Path(input_depth[1]).suffix) == ".npy"):
                             # Save as npy
                             np.save(depth_file_path, depth_pred)
                         else:
@@ -400,10 +400,10 @@ class Marigold(desc.Node):
                 denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 4
                 ensemble_size = chunk.node.ensembleSize.value if chunk.node.ensembleSize.value > 0 else 10
 
-                chunk.logger.info('Normals processing parameters:')
-                chunk.logger.info(f'    Processing Resolution = {processing_res or pipe.default_processing_resolution}')
-                chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
-                chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
+                chunk.logger.info("Normals processing parameters:")
+                chunk.logger.info(f"    Processing Resolution = {processing_res or pipe.default_processing_resolution}")
+                chunk.logger.info(f"    Denoising Step(s) = {denoise_steps}")
+                chunk.logger.info(f"    Ensemble Size = {ensemble_size}")
 
                 metadata_deep_model = {}
                 metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-Normal"
@@ -445,7 +445,7 @@ class Marigold(desc.Node):
                         normals_file_name = "normals_" + image_stem + chunk.node.outputFormat.value
                         normals_file_path = str(output_dir_path / normals_file_name)
 
-                        if chunk.node.outputFormat.value == '.npy':
+                        if chunk.node.outputFormat.value == ".npy":
                             # Save as npy
                             np.save(normals_file_path, normals_pred)
                         else:
@@ -467,10 +467,10 @@ class Marigold(desc.Node):
                 denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 4
                 ensemble_size = chunk.node.ensembleSize.value if chunk.node.ensembleSize.value > 0 else 1
 
-                chunk.logger.info('Appearance processing parameters:')
-                chunk.logger.info(f'    Processing Resolution = {processing_res or pipe.default_processing_resolution}')
-                chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
-                chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
+                chunk.logger.info("Appearance processing parameters:")
+                chunk.logger.info(f"    Processing Resolution = {processing_res or pipe.default_processing_resolution}")
+                chunk.logger.info(f"    Denoising Step(s) = {denoise_steps}")
+                chunk.logger.info(f"    Ensemble Size = {ensemble_size}")
 
                 metadata_deep_model = {}
                 metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Appearance"
@@ -479,7 +479,7 @@ class Marigold(desc.Node):
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
                         input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
-                        input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
+                        input_image = Image.fromarray((255.0 * input_image).astype(np.uint8))
 
                         # Random number generator
                         if chunk.node.seedGenerator.value < 0:
@@ -508,7 +508,7 @@ class Marigold(desc.Node):
                             pred: np.ndarray = np.moveaxis(pipe_out[pred_name].array, 0, -1).copy()
                             pred_file_name = pred_name + "_appearance_" + image_stem + chunk.node.outputFormat.value
                             pred_file_path = str(output_dir_path / pred_file_name)
-                            if chunk.node.outputFormat.value == '.npy':
+                            if chunk.node.outputFormat.value == ".npy":
                                 # Save as npy
                                 np.save(pred_file_path, pred)
                             else:
@@ -521,10 +521,10 @@ class Marigold(desc.Node):
                 denoise_steps = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 4
                 ensemble_size = chunk.node.denoisingStep.value if chunk.node.denoisingStep.value > 0 else 1
 
-                chunk.logger.info('Lighting processing parameters:')
-                chunk.logger.info(f'    Processing Resolution = {processing_res or pipe.default_processing_resolution}')
-                chunk.logger.info(f'    Denoising Step(s) = {denoise_steps}')
-                chunk.logger.info(f'    Ensemble Size = {ensemble_size}')
+                chunk.logger.info("Lighting processing parameters:")
+                chunk.logger.info(f"    Processing Resolution = {processing_res or pipe.default_processing_resolution}")
+                chunk.logger.info(f"    Denoising Step(s) = {denoise_steps}")
+                chunk.logger.info(f"    Ensemble Size = {ensemble_size}")
 
                 metadata_deep_model = {}
                 metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "Marigold-IID-Lighting"
@@ -533,7 +533,7 @@ class Marigold(desc.Node):
                 for idx, path in enumerate(chunk_image_paths):
                     with torch.no_grad():
                         input_image, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
-                        input_image = Image.fromarray((255.0*input_image).astype(np.uint8))
+                        input_image = Image.fromarray((255.0 * input_image).astype(np.uint8))
 
                         # Random number generator
                         if chunk.node.seedGenerator.value < 0:
@@ -568,7 +568,7 @@ class Marigold(desc.Node):
                             else:
                                 image.writeImage(pred_file_path, pred, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
-            chunk.logger.info('Marigold end')
+            chunk.logger.info("Marigold end")
         finally:
             chunk.logManager.end()
 
@@ -588,5 +588,5 @@ def get_image_paths_list(input_path):
                     image_paths.append((Path(v.getImage().getImagePath()), str(id)))
             image_paths.sort(key=lambda item: item[0])
     else:
-        raise ValueError(f"Input path '{input_path}' is not a valid sfmData file.")
+        raise ValueError(f"Input path '{input_path}' is not a valid SfMData file.")
     return image_paths

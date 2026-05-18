@@ -11,16 +11,18 @@ class DepthProBlockSize(desc.Parallelization):
         import math
 
         size = node.size
-        if node.attribute('blockSize').value:
-            nbBlocks = int(math.ceil(float(size) / float(node.attribute('blockSize').value)))
-            return node.attribute('blockSize').value, size, nbBlocks
+        if node.attribute("blockSize").value:
+            nbBlocks = int(math.ceil(float(size) / float(node.attribute("blockSize").value)))
+            return node.attribute("blockSize").value, size, nbBlocks
         else:
             return size, size, 1
 
 
 class DepthPro(desc.Node):
+    """
+    This node computes depth, from a monocular image using the DepthPro deep model from Apple.
+    """
     category = "Image Intrinsics"
-    documentation = """This node computes depth, from a monocular image using the DepthPro deep model from Apple."""
     
     gpu = desc.Level.INTENSIVE
 
@@ -31,7 +33,7 @@ class DepthPro(desc.Node):
         desc.File(
             name="inputImages",
             label="Input Images",
-            description="Filepath of sfmData (.sfm or .abc) containing the filepaths of images to be processed.",
+            description="Filepath of SfMData (.sfm or .abc) containing the filepaths of images to be processed.",
             value="",
         ),
         desc.BoolParam(
@@ -58,7 +60,7 @@ class DepthPro(desc.Node):
         ),
         desc.FloatParam(
             name="focalpix",
-            label="Focal in pixels",
+            label="Focal In Pixels",
             value=50.0,
             description="Focal value given in pixels.",
             range=(1.0, 10000.0, 1.0),
@@ -73,7 +75,7 @@ class DepthPro(desc.Node):
         desc.BoolParam(
             name="saveVisuImages",
             label="Save images for visualization",
-            description="Save additional png images for depth map.",
+            description="Save additional PNG images for depth map.",
             value=False,
         ),
         desc.IntParam(
@@ -94,31 +96,31 @@ class DepthPro(desc.Node):
 
     outputs = [
         desc.File(
-            name='output',
-            label='Output Folder',
-            description="Output folder containing the normal maps saved as exr images.",
+            name="output",
+            label="Output Folder",
+            description="Output folder containing the normal maps saved as EXR images.",
             value="{nodeCacheFolder}",
         ),
         desc.File(
-            name="DepthMap",
+            name="depthMap",
             label="Depth Map",
-            description="Output depth map",
+            description="Output depth map.",
             semantic="image",
             value="{nodeCacheFolder}/depth_<FILESTEM>.exr",
             enabled=lambda node: node.outputDepth.value,
         ),
         desc.File(
-            name="DepthMapColor",
+            name="depthMapColor",
             label="Colored Depth Map",
-            description="Output colored depth map",
+            description="Output colored depth map.",
             semantic="image",
             value="{nodeCacheFolder}/depth_vis_<FILESTEM>.png",
             enabled=lambda node: node.outputDepth.value and node.saveVisuImages.value,
         ),
         desc.File(
             name="Focal",
-            label="Estimated Focal in pixels",
-            description="Focal used for the metric depth estimation in a json file",
+            label="Estimated Focal In Pixels",
+            description="Focal used for the metric depth estimation in a JSON file.",
             value="{nodeCacheFolder}/focal_px_<FILESTEM>.json",
         ),
     ]
@@ -127,7 +129,7 @@ class DepthPro(desc.Node):
         input_path = node.inputImages.value
         image_paths = get_image_paths_list(input_path)
         if len(image_paths) == 0:
-            raise FileNotFoundError(f'No image files found in {input_path}')
+            raise FileNotFoundError(f"No image files found in {input_path}.")
         self.image_paths = image_paths
 
     def processChunk(self, chunk):
@@ -145,7 +147,7 @@ class DepthPro(desc.Node):
         try:
             chunk.logManager.start(chunk.node.verboseLevel.value)
             if not chunk.node.inputImages.value:
-                chunk.logger.warning('No input folder given.')
+                chunk.logger.warning("No input folder given.")
 
             self.get_image_paths(chunk.node)
             chunk_image_paths = self.image_paths[chunk.range.start:chunk.range.end]
@@ -153,7 +155,7 @@ class DepthPro(desc.Node):
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
             # computation
-            chunk.logger.info(f'Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...')
+            chunk.logger.info(f"Starting computation on chunk {chunk.range.iteration + 1}/{chunk.range.fullSize // chunk.range.blockSize + int(chunk.range.fullSize != chunk.range.blockSize)}...")
 
             # Initialize models
             chunk.logger.info("Loading DepthPro model...")
@@ -161,7 +163,7 @@ class DepthPro(desc.Node):
             DEPTHPRO_MONODEPTH_CONFIG_DICT = DepthProConfig(
                 patch_encoder_preset="dinov2l16_384",
                 image_encoder_preset="dinov2l16_384",
-                checkpoint_uri=os.getenv('DEPTHPRO_MODELS_PATH') + "/depth_pro.pt",
+                checkpoint_uri=os.getenv("DEPTHPRO_MODELS_PATH") + "/depth_pro.pt",
                 decoder_features=256,
                 use_fov_head=True,
                 fov_encoder_preset="dinov2l16_384",
@@ -179,7 +181,7 @@ class DepthPro(desc.Node):
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelName"] = "depth_pro"
             metadata_deep_model["Meshroom:mrImageIntrinsicsDecomposition:DeepModelVersion"] = "2025.09.18"
 
-            for idx, path in enumerate(chunk_image_paths):
+            for idx, _ in enumerate(chunk_image_paths):
                 with torch.no_grad():
                     img, h_ori, w_ori, pixelAspectRatio, orientation = image.loadImage(str(chunk_image_paths[idx][0]), applyPAR = True)
 
@@ -228,9 +230,9 @@ class DepthPro(desc.Node):
                     if focallength_px is not None:
                         focal_file_name = "focal_" + image_stem + ".json"
                         focal_file_path = str(outputDirPath / focal_file_name)
-                        with open(focal_file_path, 'w') as f:
+                        with open(focal_file_path, "w") as f:
                             json.dump({
-                                'focal_px': float(focallength_px),
+                                "focal_px": float(focallength_px),
                             }, f)
 
                     vis_file_name = "depth_vis_" + image_stem + ".png"
@@ -242,7 +244,7 @@ class DepthPro(desc.Node):
                     optWrite.toColorSpace(avimg.EImageColorSpace_NO_CONVERSION)
 
                     if chunk.node.outputDepth.value:
-                        depth_to_write = depth[:,:,np.newaxis]
+                        depth_to_write = depth[:, :, np.newaxis]
                         optWrite.exrCompressionMethod(avimg.EImageExrCompression_stringToEnum("DWAA"))
                         optWrite.exrCompressionLevel(45)
                         image.writeImage(depth_file_path, depth_to_write, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model,optWrite)
@@ -252,7 +254,7 @@ class DepthPro(desc.Node):
                         colored_depth = cmap(inverse_depth_normalized)[..., :3]
                         image.writeImage(vis_file_path, colored_depth, h_ori, w_ori, orientation, pixelAspectRatio, metadata_deep_model)
 
-            chunk.logger.info('DepthPro end')
+            chunk.logger.info("DepthPro end")
         finally:
             chunk.logManager.end()
 
@@ -283,6 +285,6 @@ def get_image_paths_list(input_path):
 
             image_paths.sort(key=lambda x: x[0])
     else:
-        raise ValueError(f"Input path '{input_path}' is not a valid sfmData file.")
+        raise ValueError(f"Input path '{input_path}' is not a valid SfMData file.")
     return image_paths
 
