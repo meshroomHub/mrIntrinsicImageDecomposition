@@ -76,7 +76,7 @@ Neighbor maps are rejected where the forward/backward flows are inconsistent (oc
             description="Value added to the sharpness and gradient energies before computing ratios, "
                         "to avoid amplifying noise in textureless areas.",
             value=0.0001,
-            range=(0.0, 0.01, 0.0001),
+            range=(0.0001, 0.01, 0.0001),
             advanced=True,
         ),
         desc.BoolParam(
