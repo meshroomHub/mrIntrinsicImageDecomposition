@@ -171,7 +171,7 @@ Neighbor maps are rejected where the forward/backward flows are inconsistent (oc
 
             def loadFlow(path, pixelAspectRatio, shape):
                 if not os.path.exists(path):
-                    return None
+                    raise FileNotFoundError(f"Flow file {path} is missing")
                 # RaftOF stores vectors computed on the oriented, PAR-corrected image, laid out in file space.
                 flow = image.loadImage(path, applyPAR=False, clipLow=-float("inf"), clipHigh=float("inf"),
                                        colorSpace=avimg.EImageColorSpace_NO_CONVERSION)[0][:, :, :2].copy()
@@ -188,7 +188,7 @@ Neighbor maps are rejected where the forward/backward flows are inconsistent (oc
                          "fw": None, "bw": None}
                 if flowFolder:
                     stem = imgPath.stem
-                    frame["fw"] = loadFlow(os.path.join(flowFolder, stem + ".exr"), par, img.shape[:2])
+                    frame["fw"] = loadFlow(os.path.join(flowFolder, stem + "_fw.exr"), par, img.shape[:2])
                     frame["bw"] = loadFlow(os.path.join(flowFolder, stem + "_bw.exr"), par, img.shape[:2])
                 return frame
 
